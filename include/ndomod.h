@@ -23,6 +23,8 @@
 #ifndef NDO_NDOMOD_H_INCLUDED
 #define NDO_NDOMOD_H_INCLUDED
 
+/* these are needed for the ndomod db handlers */
+#include "../include/nagios/nebstructs.h"
 
 /* this is needed for access to daemon's internal data */
 #define NSCORE 1
@@ -84,6 +86,12 @@ int nebmodule_deinit(int,int);
 
 int ndomod_init(void);
 int ndomod_deinit(void);
+
+int ndomod_db_connect(void);
+int ndomod_db_disconnect(void);
+
+
+void ndomod_handle_log_data(nebstruct_log_data * data);
 
 int ndomod_check_nagios_object_version(void);
 

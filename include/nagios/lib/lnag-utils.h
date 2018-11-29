@@ -32,6 +32,7 @@
 # define NAGIOS_END_DECL /* more of nothing */
 #endif
 
+#if 0
 #ifndef NODOXY /* doxy comments are useless here */
 # ifndef __GNUC__
 #  define GCC_VERSION 0
@@ -44,6 +45,7 @@
 #  endif /* __GNUC_PATCHLEVEL__ */
 # endif /* __GNUC__ */
 #endif /* NODOXY */
+#endif
 
 #if GCC_VERSION >= NAGIOS_MKVERSION(4, 5, 0)
 # define NAGIOS_DEPRECATED(version, hint) \

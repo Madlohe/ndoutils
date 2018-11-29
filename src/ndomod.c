@@ -74,6 +74,69 @@ NEB_API_VERSION(CURRENT_NEB_API_VERSION)
 #define NDODATA_UNSIGNED_LONG(_KEY, _LONG) { _KEY, BD_UNSIGNED_LONG, { .unsigned_long = _LONG } }
 #define NDODATA_FLOATING_POINT(_KEY, _FP) { _KEY, BD_FLOAT, { .floating_point = _FP } }
 
+
+#define NDOMOD_HANDLER_FUNCTION(type) \
+void ndomod_handle_##type(nebstruct_##type * data)
+
+#define MAX_SQL_BUFFER 4096
+#define MAX_SQL_BINDINGS 64
+#define MAX_BIND_BUFFER 256
+
+
+#define SET_SQL(buffer) \
+do { \
+    strncpy(ndomod_mysql_query, buffer, MAX_SQL_BUFFER - 1); \
+    ndomod_mysql_result = mysql_stmt_prepare(ndomod_mysql_stmt, ndomod_mysql_query, strlen(ndomod_mysql_query)); \
+    if (ndomod_mysql_result > 0) { \
+        /* handle errors */ \
+    } \
+} while(0) \
+
+
+#define RESET_BIND() \
+memset(ndomod_mysql_bind, 0, sizeof(ndomod_mysql_bind))
+
+
+#define SET_BIND_INT(i, _buffer) \
+do { \
+    ndomod_mysql_bind[i].buffer_type = MYSQL_TYPE_LONG; \
+    ndomod_mysql_bind[i].buffer      = &(_buffer); \
+    ndomod_mysql_bind[i].is_null     = 0; \
+} while(0)
+
+
+#define SET_BIND_STR(i, _buffer) \
+do { \
+    ndomod_mysql_bind[i].buffer_type   = MYSQL_TYPE_STRING; \
+    ndomod_mysql_bind[i].buffer_length = MAX_BIND_BUFFER; \
+    ndomod_mysql_bind[i].buffer        = &(_buffer); \
+    ndomod_mysql_bind[i].length        = &(ndomod_mysql_tmp_str_len[i]); \
+    ndomod_mysql_bind[i].is_null       = 0; \
+    \
+    ndomod_mysql_tmp_str_len[i]               = strlen(_buffer); \
+} while(0)
+
+
+#define BIND() \
+do { \
+    ndomod_mysql_result = mysql_stmt_bind_param(ndomod_mysql_stmt, ndomod_mysql_bind); \
+    if (ndomod_mysql_result > 0) { \
+        /* handle errors */ \
+    } \
+} while(0)
+
+
+#define QUERY() \
+do { \
+    ndomod_mysql_result = mysql_stmt_execute(ndomod_mysql_stmt); \
+    if (ndomod_mysql_result > 0) { \
+        /* handle errors */ \
+    } \
+} while(0)
+
+
+
+
 struct ndo_broker_data {
     int key;
     int datatype;
@@ -109,6 +172,23 @@ int ndomod_config_output_options = NDOMOD_CONFIG_DUMP_ALL;
 unsigned long ndomod_sink_buffer_slots = 5000;
 ndomod_sink_buffer sinkbuf;
 int has_ver403_long_output = (CURRENT_OBJECT_STRUCTURE_VERSION >= 403);
+
+int ndomod_database_connected = NDO_FALSE;
+char * ndomod_db_host = NULL;
+int ndomod_db_port = 3306;
+char * ndomod_db_socket = NULL;
+char * ndomod_db_user = NULL;
+char * ndomod_db_pass = NULL;
+char * ndomod_db_name = NULL;
+
+
+MYSQL * ndomod_mysql = NULL;
+MYSQL_STMT * ndomod_mysql_stmt = NULL;
+MYSQL_BIND ndomod_mysql_bind[MAX_SQL_BINDINGS];
+int ndomod_mysql_result = 0;
+char ndomod_mysql_query[MAX_SQL_BUFFER] = { 0 };
+long ndomod_mysql_tmp_str_len[MAX_SQL_BINDINGS] = { 0 };
+
 
 extern int errno;
 
@@ -156,19 +236,32 @@ int nebmodule_init(int flags, char *args, void *handle)
 
     /* check Nagios object structure version */
     if (ndomod_check_nagios_object_version() == NDO_ERROR) {
-        return - 1;
+        return -1;
     }
 
     /* process arguments */
     if (ndomod_process_module_args(args) == NDO_ERROR) {
         ndomod_write_to_logs("ndomod: An error occurred while attempting to process module arguments.", NSLOG_INFO_MESSAGE);
-        return - 1;
+        return -1;
     }
 
+    ndomod_write_to_logs("HEDEN: about to connect...", NSLOG_INFO_MESSAGE);
     /* do some initialization stuff... */
     if (ndomod_init() == NDO_ERROR) {
         ndomod_write_to_logs("ndomod: An error occurred while attempting to initialize.", NSLOG_INFO_MESSAGE);
-        return - 1;
+        return -1;
+    }
+
+    /* connect to the database */
+    ndomod_write_to_logs("HEDEN: about to connect...", NSLOG_INFO_MESSAGE);
+    if (ndomod_db_connect() == NDO_ERROR) {
+
+        char * error_msg = NULL;
+
+        asprintf(&error_msg, "ndomod: An error occured while attempting to connect to database: %s", mysql_error(ndomod_mysql));
+        ndomod_write_to_logs(error_msg, NSLOG_INFO_MESSAGE);
+        free(error_msg);
+        return -1;
     }
 
     return 0;
@@ -216,6 +309,51 @@ int ndomod_check_nagios_object_version(void)
     }
 
     return NDO_OK;
+}
+
+
+/* connects to the database and initializes some other miscellaneous database related memory */
+int ndomod_db_connect(void)
+{
+    MYSQL * connected = NULL;
+    ndomod_mysql = mysql_init(NULL);
+
+    if (ndomod_mysql == NULL) {
+        return NDO_ERROR;
+    }
+
+    if (ndomod_db_host == NULL) {
+        ndomod_db_host = strdup("localhost");
+    }
+
+    connected = mysql_real_connect(
+            ndomod_mysql,
+            ndomod_db_host,
+            ndomod_db_user,
+            ndomod_db_pass,
+            ndomod_db_name,
+            ndomod_db_port,
+            ndomod_db_socket,
+            CLIENT_REMEMBER_OPTIONS);
+
+    if (connected == NULL) {
+        return NDO_ERROR;
+    }
+
+    ndomod_mysql_stmt = mysql_stmt_init(ndomod_mysql);
+
+    if (ndomod_mysql_stmt == NULL) {
+        return NDO_ERROR;
+    }
+
+    return NDO_OK;
+}
+
+
+int ndomod_db_disconnect(void)
+{
+    mysql_close(ndomod_mysql);
+    mysql_library_end();
 }
 
 
@@ -283,6 +421,33 @@ int ndomod_deinit(void)
     ndomod_free_config_memory();
 
     return NDO_OK;
+}
+
+
+/***
+ DATABASE FUNCS
+***/
+
+NDOMOD_HANDLER_FUNCTION(log_data)
+{
+    /* this particular function is a bit weird because it starts passing logs to the neb module
+       before the database initialization has occured, so if the db hasn't been initialized, we just return */
+    if (ndomod_mysql == NULL) {
+        return;
+    }
+
+    RESET_BIND();
+
+    SET_SQL("INSERT INTO nagios_logentries SET instance_id = 1, logentry_time = FROM_UNIXTIME(?), entry_time = FROM_UNIXTIME(?), entry_time_usec = ?, logentry_type = ?, logentry_data = ?, realtime_data = 1, inferred_data_extracted = 1");
+
+    SET_BIND_INT(0, data->entry_time);
+    SET_BIND_INT(1, data->timestamp.tv_sec);
+    SET_BIND_INT(2, data->timestamp.tv_usec);
+    SET_BIND_INT(3, data->data_type);
+    SET_BIND_STR(4, data->data);
+
+    BIND();
+    QUERY();
 }
 
 
@@ -485,6 +650,25 @@ int ndomod_process_config_var(char *arg)
 
     else if (!strcmp(var, "file_rotation_timeout")) {
         ndomod_sink_rotation_timeout = atoi(val);
+    }
+
+    else if (!strcmp(var, "db_host")) {
+        ndomod_db_host = strdup(val);
+    }
+    else if (!strcmp(var, "db_port")) {
+        ndomod_db_port = atoi(val);
+    }
+    else if (!strcmp(var, "db_socket")) {
+        ndomod_db_socket = strdup(val);
+    }
+    else if (!strcmp(var, "db_user")) {
+        ndomod_db_user = strdup(val);
+    }
+    else if (!strcmp(var, "db_password") || !strcmp(var, "db_pass")) {
+        ndomod_db_pass = strdup(val);
+    }
+    else if (!strcmp(var, "db_name")) {
+        ndomod_db_name = strdup(val);
     }
 
     /* add bitwise processing opts */
@@ -1255,11 +1439,12 @@ int ndomod_sink_buffer_set_overflow(ndomod_sink_buffer *sbuf, unsigned long num)
 #define NDO_REGISTER_CALLBACK(_OPT, _CBTYPE, _SUCCESS_MSG)                                                  \
     do {                                                                                                    \
         if ((result == NDO_OK) && (ndomod_process_options & _OPT)) {                                        \
-            result = neb_register_callback(_CBTYPE, ndomod_module_handle, priority, ndomod_broker_data);    \
+            result = neb_register_callback(_CBTYPE, ndomod_module_handle, 0, ndomod_broker_data);           \
             if (result == NDO_OK) {                                                                         \
-                asprintf(&msg, "ndo registered for " _SUCCESS_MSG " data\n");                               \
-                ndomod_write_to_logs(msg, NSLOG_INFO_MESSAGE);                                              \
-                free(msg);                                                                                  \
+                ndomod_write_to_logs("ndo registered for " _SUCCESS_MSG " data", NSLOG_INFO_MESSAGE);       \
+            }                                                                                               \
+            else {                                                                                          \
+                ndomod_write_to_logs("error registering ndo for " _SUCCESS_MSG " data", NSLOG_INFO_MESSAGE);\
             }                                                                                               \
         }                                                                                                   \
     } while (0)
@@ -1267,9 +1452,7 @@ int ndomod_sink_buffer_set_overflow(ndomod_sink_buffer *sbuf, unsigned long num)
 /* registers for callbacks */
 int ndomod_register_callbacks(void)
 {
-    int priority = 0;
-    int result   = NDO_OK;
-    char *msg    = NULL;
+    int result = NDO_OK;
 
     NDO_REGISTER_CALLBACK(NDOMOD_PROCESS_PROCESS_DATA, NEBCALLBACK_PROCESS_DATA, "process");
     NDO_REGISTER_CALLBACK(NDOMOD_PROCESS_TIMED_EVENT_DATA, NEBCALLBACK_TIMED_EVENT_DATA, "timed event");
@@ -1895,8 +2078,9 @@ int ndomod_broker_data(int event_type, void *data)
 
     case NEBCALLBACK_LOG_DATA:
 
+        ndomod_handle_log_data(data);
+/*
         logdata = (nebstruct_log_data *)data;
-
         {
             struct ndo_broker_data log_data[] = {
                 NDODATA_INTEGER(NDO_DATA_TYPE, logdata->type),
@@ -1914,7 +2098,7 @@ int ndomod_broker_data(int event_type, void *data)
                 ARRAY_SIZE(log_data),
                 TRUE);
         }
-
+*/
         break;
 
     case NEBCALLBACK_SYSTEM_COMMAND_DATA:
