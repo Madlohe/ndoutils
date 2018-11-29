@@ -1,37 +1,53 @@
+
 NDOMOD_HANDLER_FUNCTION(log_data)
+{
+    /* this particular function is a bit weird because it starts passing logs to the neb module
+       before the database initialization has occured, so if the db hasn't been initialized, we just return */
+    if (ndomod_mysql == NULL) {
+        return;
+    }
+
+    RESET_BIND();
+
+    SET_SQL("
+            INSERT INTO
+                nagios_logentries
+            SET
+                instance_id             = 1,
+                logentry_time           = FROM_UNIXTIME(?),
+                entry_time              = FROM_UNIXTIME(?),
+                entry_time_usec         = ?,
+                logentry_type           = ?,
+                logentry_data           = ?,
+                realtime_data           = 1,
+                inferred_data_extracted = 1
+            ");
+
+    SET_BIND_INT(0, data->entry_time);
+    SET_BIND_INT(1, data->timestamp.tv_sec);
+    SET_BIND_INT(2, data->timestamp.tv_usec);
+    SET_BIND_INT(3, data->data_type);
+    SET_BIND_STR(4, data->data);
+
+    BIND();
+    QUERY();
+}
+
+
 
 // 1980
 NDOMOD_HANDLER_FUNCTION(system_command_data)
 {
+    RESET_BIND();
 
-        es[0] = ndo_escape_buffer(cmddata->command_line);
-        es[1] = ndo_escape_buffer(cmddata->output);
-        es[2] = ndo_escape_buffer(cmddata->output);
-
-        {
-            struct ndo_broker_data system_command_data[] = {
-                NDODATA_INTEGER(NDO_DATA_TYPE, cmddata->type),
-                NDODATA_INTEGER(NDO_DATA_FLAGS, cmddata->flags),
-                NDODATA_INTEGER(NDO_DATA_ATTRIBUTES, cmddata->attr),
-                NDODATA_TIMESTAMP(NDO_DATA_TIMESTAMP, cmddata->timestamp),
-                NDODATA_TIMESTAMP(NDO_DATA_STARTTIME, cmddata->start_time),
-                NDODATA_TIMESTAMP(NDO_DATA_ENDTIME, cmddata->end_time),
-                NDODATA_INTEGER(NDO_DATA_TIMEOUT, cmddata->timeout),
-                NDODATA_STRING(NDO_DATA_COMMANDLINE, es[0]),
-                NDODATA_INTEGER(NDO_DATA_EARLYTIMEOUT, cmddata->early_timeout),
-                NDODATA_FLOATING_POINT(NDO_DATA_EXECUTIONTIME, cmddata->execution_time),
-                NDODATA_INTEGER(NDO_DATA_RETURNCODE, cmddata->return_code),
-                NDODATA_STRING(NDO_DATA_OUTPUT, es[1]),
-                NDODATA_STRING(NDO_DATA_LONGOUTPUT, es[2] )
-            };
     SET_SQL("
             INSERT INTO
                 nagios_systemcommands
             SET
                 instance_id     = 1,
-                start_time      = ?,
+                start_time      = FROM_UNIXTIME(?),
                 start_time_usec = ?,
-                end_time        = ?,
+                end_time        = FROM_UNIXTIME(?),
                 end_time_usec   = ?,
                 command_line    = ?,
                 timeout         = ?,
@@ -42,9 +58,9 @@ NDOMOD_HANDLER_FUNCTION(system_command_data)
                 long_output     = ?
             ON DUPLICATE KEY UPDATE
                 instance_id     = 1,
-                start_time      = ?,
+                start_time      = FROM_UNIXTIME(?),
                 start_time_usec = ?,
-                end_time        = ?,
+                end_time        = FROM_UNIXTIME(?),
                 end_time_usec   = ?,
                 command_line    = ?,
                 timeout         = ?,
@@ -55,52 +71,32 @@ NDOMOD_HANDLER_FUNCTION(system_command_data)
                 long_output     = ?
             ");
 
-    /* convert timestamp, etc */
-    result=ndo2db_convert_standard_data_elements(idi,&type,&flags,&attr,&tstamp);
+    SET_BIND_INT(0, data->start_time.tv_sec);
+    SET_BIND_INT(1, data->start_time.tv_usec);
+    SET_BIND_INT(2, data->end_time.tv_sec);
+    SET_BIND_INT(3, data->end_time.tv_usec);
+    SET_BIND_STR(4, data->command_line);
+    SET_BIND_INT(5, data->timeout);
+    SET_BIND_INT(6, data->early_timeout);
+    SET_BIND_INT(7, data->expiration_time);
+    SET_BIND_INT(8, data->return_code);
+    SET_BIND_INT(9, data->output);
+    SET_BIND_INT(10, data->long_output);
 
-    /* covert vars */
-    result=ndo2db_convert_string_to_int(idi->buffered_input[NDO_DATA_TIMEOUT],&timeout);
-    result=ndo2db_convert_string_to_int(idi->buffered_input[NDO_DATA_EARLYTIMEOUT],&early_timeout);
-    result=ndo2db_convert_string_to_int(idi->buffered_input[NDO_DATA_RETURNCODE],&return_code);
-    result=ndo2db_convert_string_to_double(idi->buffered_input[NDO_DATA_EXECUTIONTIME],&execution_time);
-    result=ndo2db_convert_string_to_timeval(idi->buffered_input[NDO_DATA_STARTTIME],&start_time);
-    result=ndo2db_convert_string_to_timeval(idi->buffered_input[NDO_DATA_ENDTIME],&end_time);
+    SET_BIND_INT(11, data->start_time.tv_sec);
+    SET_BIND_INT(12, data->start_time.tv_usec);
+    SET_BIND_INT(13, data->end_time.tv_sec);
+    SET_BIND_INT(14, data->end_time.tv_usec);
+    SET_BIND_STR(15, data->command_line);
+    SET_BIND_INT(16, data->timeout);
+    SET_BIND_INT(17, data->early_timeout);
+    SET_BIND_INT(18, data->expiration_time);
+    SET_BIND_INT(19, data->return_code);
+    SET_BIND_INT(20, data->output);
+    SET_BIND_INT(21, data->long_output);
 
-    es[0]=ndo2db_db_escape_string(idi,idi->buffered_input[NDO_DATA_COMMANDLINE]);
-    es[1]=ndo2db_db_escape_string(idi,idi->buffered_input[NDO_DATA_OUTPUT]);
-    es[2]=ndo2db_db_escape_string(idi,idi->buffered_input[NDO_DATA_LONGOUTPUT]);
-
-    ts[0]=ndo2db_db_timet_to_sql(idi,start_time.tv_sec);
-    ts[1]=ndo2db_db_timet_to_sql(idi,end_time.tv_sec);
-
-    /* save entry to db */
-    if(asprintf(&buf,"instance_id='%lu', start_time=%s, start_time_usec='%lu', end_time=%s, end_time_usec='%lu', command_line='%s', timeout='%d', early_timeout='%d', execution_time='%lf', return_code='%d', output='%s', long_output='%s'"
-            ,idi->dbinfo.instance_id
-            ,ts[0]
-            ,start_time.tv_usec
-            ,ts[1]
-            ,end_time.tv_usec
-            ,es[0]
-            ,timeout
-            ,early_timeout
-            ,execution_time
-            ,return_code
-            ,es[1]
-            ,es[2]
-           )==-1)
-        buf=NULL;
-
-    if(asprintf(&buf1,"INSERT INTO %s SET %s ON DUPLICATE KEY UPDATE %s"
-            ,ndo2db_db_tablenames[NDO2DB_DBTABLE_SYSTEMCOMMANDS]
-            ,buf
-            ,buf
-           )==-1)
-        buf1=NULL;
-
-    result=ndo2db_db_query(idi,buf1);
-    free(buf);
-    free(buf1);
-
+    BIND();
+    QUERY();
 }
 
 
