@@ -30,6 +30,51 @@ Coupled with the fact that we're changing to prepared statements, this may be
 a huge performance enhancement. It may also **not** be, but we have to build it
 to find out the nuances.
 
+Here are the current developmental milestones:
+
+* [ ] Converge the `ndomod_broker_data` data serialization with the functions in `dbhandlers.c`
+  * [ ] `NEBCALLBACK_PROCESS_DATA`
+    * [ ] `NEBTYPE_PROCESS_START`
+  * [ ] `NEBCALLBACK_TIMED_EVENT_DATA`
+    * [ ] `EVENT_SERVICE_CHECK`
+    * [ ] `EVENT_HOST_CHECK`
+    * [ ] `EVENT_SCHEDULED_DOWNTIME`
+    * [ ] Other
+  * [x] `NEBCALLBACK_LOG_DATA`
+  * [ ] `NEBCALLBACK_SYSTEM_COMMAND_DATA`
+  * [ ] `NEBCALLBACK_EVENT_HANDLER_DATA`
+  * [ ] `NEBCALLBACK_NOTIFICATION_DATA`
+  * [ ] `NEBCALLBACK_SERVICE_CHECK_DATA`
+  * [ ] `NEBCALLBACK_HOST_CHECK_DATA`
+  * [ ] `NEBCALLBACK_COMMENT_DATA`
+  * [ ] `NEBCALLBACK_DOWNTIME_DATA`
+  * [ ] `NEBCALLBACK_FLAPPING_DATA`
+  * [ ] `NEBCALLBACK_PROGRAM_STATUS_DATA`
+  * [ ] `NEBCALLBACK_HOST_STATUS_DATA`
+  * [ ] `NEBCALLBACK_SERVICE_STATUS_DATA`
+  * [ ] `NEBCALLBACK_CONTACT_STATUS_DATA`
+  * [ ] `NEBCALLBACK_ADAPTIVE_PROGRAM_DATA`
+  * [ ] `NEBCALLBACK_ADAPTIVE_HOST_DATA`
+  * [ ] `NEBCALLBACK_ADAPTIVE_SERVICE_DATA`
+  * [ ] `NEBCALLBACK_ADAPTIVE_CONTACT_DATA`
+  * [ ] `NEBCALLBACK_EXTERNAL_COMMAND_DATA`
+  * [ ] `NEBCALLBACK_AGGREGATED_STATUS_DATA`
+  * [ ] `NEBCALLBACK_RETENTION_DATA`
+  * [ ] `NEBCALLBACK_CONTACT_NOTIFICATION_DATA`
+  * [ ] `NEBCALLBACK_CONTACT_NOTIFICATION_METHOD_DATA`
+  * [ ] `NEBCALLBACK_ACKNOWLEDGEMENT_DATA`
+  * [ ] `NEBCALLBACK_STATE_CHANGE_DATA`
+  * [ ] `ndomod_broker_even` Post-processing
+    * [ ] `NEBCALLBACK_PROCESS_DATA`
+      * [ ] `NEBTYPE_PROCESS_START`
+      * [ ] `NEBTYPE_PROCESS_EVENTLOOPSTART`
+    * [ ] `NEBCALLBACK_RETENTION_DATA`
+      * [ ] `NEBTYPE_RETENTIONDATA_ENDLOAD`
+* [ ] Deprecate `instance_id`
+* [ ] Optimize queries
+* [ ] Global flag to stop re-preparing the same query if possible
+* [ ] Periodic MySQL connection checking
+
 ## Nagios Data Output Utilities
 
 TL;DR? You can jump straight to [compiling](#compiling), [initializing](#initializing-the-database), [installing the broker module](#installing-the-broker-module), and [installing the daemon](#installing-the-daemon).
