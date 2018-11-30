@@ -438,7 +438,19 @@ NDOMOD_HANDLER_FUNCTION(log_data)
 
     RESET_BIND();
 
-    SET_SQL("INSERT INTO nagios_logentries SET instance_id = 1, logentry_time = FROM_UNIXTIME(?), entry_time = FROM_UNIXTIME(?), entry_time_usec = ?, logentry_type = ?, logentry_data = ?, realtime_data = 1, inferred_data_extracted = 1");
+    SET_SQL("
+            INSERT INTO
+                nagios_logentries
+            SET
+                instance_id             = 1,
+                logentry_time           = FROM_UNIXTIME(?),
+                entry_time              = FROM_UNIXTIME(?),
+                entry_time_usec         = ?,
+                logentry_type           = ?,
+                logentry_data           = ?,
+                realtime_data           = 1,
+                inferred_data_extracted = 1
+            ");
 
     SET_BIND_INT(0, data->entry_time);
     SET_BIND_INT(1, data->timestamp.tv_sec);
@@ -450,6 +462,23 @@ NDOMOD_HANDLER_FUNCTION(log_data)
     QUERY();
 }
 
+
+/* todo: this should be defined separately based on compiler i bet */
+int ndomod_get_object_id(char * name1, char * name2)
+{
+    /* 138 is the allowed length of name columns (128) + strlen("name1 is ") + null terminating */
+
+    /* preinitialize these with name1, name2 respectively via c99 designated initializer */
+    char sql_name1[138] = { [0] = 'n', [1] = 'a', [2] = 'm', [3] = 'e', [4] = '1', [5] = ' ' };
+    char sql_name2[138] = { [0] = 'n', [1] = 'a', [2] = 'm', [3] = 'e', [4] = '2', [5] = ' ' };
+
+    if (name1 == NULL) {
+        strncpy(sql_name1, "name1 IS NULL", 137);
+    }
+    else {
+        snprintf(sql_name1, "name1 = ")
+    }
+}
 
 
 /****************************************************************************/

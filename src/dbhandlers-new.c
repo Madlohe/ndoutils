@@ -140,9 +140,9 @@ NDOMOD_HANDLER_FUNCTION(event_handler_data)
                 nagios_eventhandlers
             SET
                 instance_id       = 1,
-                start_time        = ?,
+                start_time        = FROM_UNIXTIME(?),
                 start_time_usec   = ?,
-                end_time          = ?,
+                end_time          = FROM_UNIXTIME(?),
                 end_time_usec     = ?,
                 eventhandler_type = ?,
                 object_id         = ?,
@@ -159,9 +159,9 @@ NDOMOD_HANDLER_FUNCTION(event_handler_data)
                 long_output       = ?
             ON DUPLICATE KEY UPDATE
                 instance_id       = 1,
-                start_time        = ?,
+                start_time        = FROM_UNIXTIME(?),
                 start_time_usec   = ?,
-                end_time          = ?,
+                end_time          = FROM_UNIXTIME(?),
                 end_time_usec     = ?,
                 eventhandler_type = ?,
                 object_id         = ?,
@@ -275,9 +275,9 @@ NDOMOD_HANDLER_FUNCTION(notification_data)
                 nagios_notifications
             SET
                 instance_id         = 1,
-                start_time          = ?,
+                start_time          = FROM_UNIXTIME(?),
                 start_time_usec     = ?,
-                end_time            = ?,
+                end_time            = FROM_UNIXTIME(?),
                 end_time_usec       = ?,
                 notification_type   = ?,
                 notification_reason = ?,
@@ -289,9 +289,9 @@ NDOMOD_HANDLER_FUNCTION(notification_data)
                 contacts_notified   = ?
             ON DUPLICATE KEY UPDATE
                 instance_id         = 1,
-                start_time          = ?,
+                start_time          = FROM_UNIXTIME(?),
                 start_time_usec     = ?,
-                end_time            = ?,
+                end_time            = FROM_UNIXTIME(?),
                 end_time_usec       = ?,
                 notification_type   = ?,
                 notification_reason = ?,
@@ -400,9 +400,9 @@ NDOMOD_HANDLER_FUNCTION(service_check_data)
                 nagios_servicechecks
             SET
                 instance_id           = 1,
-                start_time            = ?,
+                start_time            = FROM_UNIXTIME(?),
                 start_time_usec       = ?,
-                end_time              = ?,
+                end_time              = FROM_UNIXTIME(?),
                 end_time_usec         = ?,
                 service_object_id     = ?,
                 check_type            = ?,
@@ -423,9 +423,9 @@ NDOMOD_HANDLER_FUNCTION(service_check_data)
                 command_line          = ?
             ON DUPLICATE KEY UPDATE
                 instance_id           = 1,
-                start_time            = ?,
+                start_time            = FROM_UNIXTIME(?),
                 start_time_usec       = ?,
-                end_time              = ?,
+                end_time              = FROM_UNIXTIME(?),
                 end_time_usec         = ?,
                 service_object_id     = ?,
                 check_type            = ?,
@@ -573,9 +573,9 @@ NDOMOD_HANDLER_FUNCTION(host_check_data)
                 nagios_hostchecks
             SET
                 instance_id           = 1,
-                start_time            = ?,
+                start_time            = FROM_UNIXTIME(?),
                 start_time_usec       = ?,
-                end_time              = ?,
+                end_time              = FROM_UNIXTIME(?),
                 end_time_usec         = ?,
                 host_object_id        = ?,
                 is_raw_check          = ?,
@@ -597,9 +597,9 @@ NDOMOD_HANDLER_FUNCTION(host_check_data)
                 command_line          = ?
             ON DUPLICATE KEY UPDATE
                 instance_id           = 1,
-                start_time            = ?,
+                start_time            = FROM_UNIXTIME(?),
                 start_time_usec       = ?,
-                end_time              = ?,
+                end_time              = FROM_UNIXTIME(?),
                 end_time_usec         = ?,
                 host_object_id        = ?,
                 is_raw_check          = ?,
