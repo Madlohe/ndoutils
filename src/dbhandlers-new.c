@@ -1,4 +1,123 @@
 
+void ndomod_clear_tables()
+{
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_programstatus);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hoststatus);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicestatus);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactstatus);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_timedeventqueue);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_comments);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_scheduleddowntime);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_runtimevariables);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_customvariablestatus);
+
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_configfiles);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_configfilevariables);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_customvariables);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_commands);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_timeperiods);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_timeperiodtimeranges);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactgroups);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactgroupmembers);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostgroups);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicegroups);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicegroupmembers);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostescalations);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostescalationcontacts);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_serviceescalations);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_serviceescalationcontacts);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostdependencies);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicedependencies);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contacts);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactaddresses);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactnotificationcommands);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hosts);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostparenthosts);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostcontacts);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_services);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_serviceparentservices);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicecontacts);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicecontactgroups);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostcontactgroups);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostescalationcontactgroups);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_serviceescalationcontactgroups);
+}
+
+void ndomod_set_all_objects_as_inactive()
+{
+    SET_SQL_AND_QUERY(UPDATE nagios_objects SET is_active = 0);
+}
+
+
+NDOMOD_HANDLER_FUNCTION(process_data)
+{
+    char * program_name              = strdup("Nagios");
+    char * program_version           = strdup(get_program_version());
+    char * program_modification_date = strdup(get_program_modification_date());
+    int program_pid                  = (int) getpid();
+
+    if (name == NULL || version == NULL || modification_date == NULL) {
+        ndomod_write_to_logs("Unable to allocate memory for process data", NSLOG_INFO_MESSAGE);
+        return;
+    }
+
+    if (data->type == NEBTYPE_PROCESS_START) {
+        ndomod_write_active_objects();
+    }
+
+    RESET_BIND();
+
+    SET_SQL(
+            INSERT INTO
+                nagios_processevents
+            SET
+                instance_id     = 1,
+                event_type      = ?
+                event_time      = FROM_UNIXTIME(?),
+                event_time_usec = ?,
+                process_id      = ?
+                program_name    = ?
+                program_version = ?
+                program_date    = ?
+            );
+
+    SET_BIND_INT(0, data->type);
+    SET_BIND_INT(1, data->timestamp.tv_sec);
+    SET_BIND_INT(2, data->timestamp.tv_usec);
+    SET_BIND_INT(3, program_pid);
+    SET_BIND_STR(4, program_name);
+    SET_BIND_STR(5, program_version);
+    SET_BIND_STR(6, program_modification_date);
+
+    BIND();
+    QUERY();
+
+    if (data->type == NEBTYPE_PROCESS_PRELAUNCH) {
+        ndomod_clear_tables();
+        ndomod_set_all_objects_as_inactive();
+    }
+
+    if (data->type == NEBTYPE_PROCESS_SHUTDOWN || data->type == NEBTYPE_PROCESS_RESTART) {
+
+        RESET_BIND();
+
+        SET_SQL(
+                UPDATE
+                    nagios_programstatus
+                SET
+                    program_end_time     = FROM_UNIXTIME(?),
+                    is_currently_running = 0
+            );
+
+        SET_BIND_INT(0, data->timestamp.tv_sec);
+
+        BIND();
+        QUERY();
+    }
+}
+
+
+
 NDOMOD_HANDLER_FUNCTION(log_data)
 {
     /* this particular function is a bit weird because it starts passing logs to the neb module
@@ -154,7 +273,7 @@ NDOMOD_HANDLER_FUNCTION(event_handler_data)
                 timeout           = ?,
                 early_timeout     = ?,
                 execution_time    = ?,
-                return_code       = ?
+                return_code       = ?,
                 output            = ?,
                 long_output       = ?
             ON DUPLICATE KEY UPDATE
@@ -173,10 +292,16 @@ NDOMOD_HANDLER_FUNCTION(event_handler_data)
                 timeout           = ?,
                 early_timeout     = ?,
                 execution_time    = ?,
-                return_code       = ?
+                return_code       = ?,
                 output            = ?,
                 long_output       = ?
             ");
+
+    SET_BIND_INT(0, data->start_time.tv_sec);
+    SET_BIND_INT(1, data->start_time.tv_usec);
+    SET_BIND_INT(2, data->end_time.tv_sec);
+    SET_BIND_INT(3, data->end_time.tv_usec);
+
 
     result=ndo2db_convert_string_to_int(idi->buffered_input[NDO_DATA_EVENTHANDLERTYPE],&eventhandler_type);
     result=ndo2db_convert_string_to_int(idi->buffered_input[NDO_DATA_STATE],&state);
