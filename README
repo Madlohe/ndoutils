@@ -43,28 +43,28 @@ Here are the current developmental milestones:
   * [x] `NEBCALLBACK_LOG_DATA`
   * [x] `NEBCALLBACK_SYSTEM_COMMAND_DATA`
   * [ ] `NEBCALLBACK_EVENT_HANDLER_DATA`
-  * [ ] `NEBCALLBACK_NOTIFICATION_DATA`
-  * [ ] `NEBCALLBACK_SERVICE_CHECK_DATA`
-  * [ ] `NEBCALLBACK_HOST_CHECK_DATA`
-  * [ ] `NEBCALLBACK_COMMENT_DATA`
-  * [ ] `NEBCALLBACK_DOWNTIME_DATA`
+  * [x] `NEBCALLBACK_NOTIFICATION_DATA`
+  * [x] `NEBCALLBACK_SERVICE_CHECK_DATA`
+  * [x] `NEBCALLBACK_HOST_CHECK_DATA`
+  * [x] `NEBCALLBACK_COMMENT_DATA`
+  * [x] `NEBCALLBACK_DOWNTIME_DATA`
   * [ ] `NEBCALLBACK_FLAPPING_DATA`
   * [ ] `NEBCALLBACK_PROGRAM_STATUS_DATA`
   * [ ] `NEBCALLBACK_HOST_STATUS_DATA`
   * [ ] `NEBCALLBACK_SERVICE_STATUS_DATA`
   * [ ] `NEBCALLBACK_CONTACT_STATUS_DATA`
-  * [ ] `NEBCALLBACK_ADAPTIVE_PROGRAM_DATA`
-  * [ ] `NEBCALLBACK_ADAPTIVE_HOST_DATA`
-  * [ ] `NEBCALLBACK_ADAPTIVE_SERVICE_DATA`
-  * [ ] `NEBCALLBACK_ADAPTIVE_CONTACT_DATA`
+  * [x] `NEBCALLBACK_ADAPTIVE_PROGRAM_DATA`
+  * [x] `NEBCALLBACK_ADAPTIVE_HOST_DATA`
+  * [x] `NEBCALLBACK_ADAPTIVE_SERVICE_DATA`
+  * [x] `NEBCALLBACK_ADAPTIVE_CONTACT_DATA`
   * [ ] `NEBCALLBACK_EXTERNAL_COMMAND_DATA`
-  * [ ] `NEBCALLBACK_AGGREGATED_STATUS_DATA`
-  * [ ] `NEBCALLBACK_RETENTION_DATA`
+  * [x] `NEBCALLBACK_AGGREGATED_STATUS_DATA`
+  * [x] `NEBCALLBACK_RETENTION_DATA`
   * [ ] `NEBCALLBACK_CONTACT_NOTIFICATION_DATA`
   * [ ] `NEBCALLBACK_CONTACT_NOTIFICATION_METHOD_DATA`
   * [ ] `NEBCALLBACK_ACKNOWLEDGEMENT_DATA`
   * [ ] `NEBCALLBACK_STATE_CHANGE_DATA`
-  * [ ] `ndomod_broker_even` Post-processing
+  * [ ] `ndomod_broker_event` Post-processing
     * [ ] `NEBCALLBACK_PROCESS_DATA`
       * [ ] `NEBTYPE_PROCESS_START`
       * [ ] `NEBTYPE_PROCESS_EVENTLOOPSTART`
@@ -74,6 +74,8 @@ Here are the current developmental milestones:
 * [ ] Optimize queries
 * [ ] Global flag to stop re-preparing the same query if possible
 * [ ] Periodic MySQL connection checking
+* [ ] Clean up config options (tcp port, ssl, etc. are all irrelevant now)
+
 
 ## Nagios Data Output Utilities
 
@@ -204,32 +206,26 @@ below to fit the name of the module version you're using.
     previous `ndomod_processing_options` config option, which used a bitmask. The 
     following processing options are available.
     
-        acknowledgement_data=1
-        adaptive_contact_data=1
-        adaptive_host_data=1
-        adaptive_program_data=1
-        adaptive_service_data=1
-        aggregated_status_data=1
-        comment_data=1
-        contact_status_data=1
-        downtime_data=1
-        event_handler_data=1
-        external_command_data=1
-        flapping_data=1
-        host_check_data=1
-        host_status_data=1
-        log_data=1
-        main_config_data=1
-        notification_data=1
-        object_config_data=1
-        process_data=1
-        program_status_data=1
-        retention_data=1
-        service_check_data=1
-        service_status_data=1
-        statechange_data=1
-        system_command_data=1
-        timed_event_data=1
+        acknowledgement_data   = 1
+        comment_data           = 1
+        contact_status_data    = 1
+        downtime_data          = 1
+        event_handler_data     = 1
+        external_command_data  = 1
+        flapping_data          = 1
+        host_check_data        = 1
+        host_status_data       = 1
+        log_data               = 1
+        main_config_data       = 1
+        notification_data      = 1
+        object_config_data     = 1
+        process_data           = 1
+        program_status_data    = 1
+        service_check_data     = 1
+        service_status_data    = 1
+        state_change_data      = 1
+        system_command_data    = 1
+        timed_event_data       = 1
     
 Installing the Daemon
 ---------------------

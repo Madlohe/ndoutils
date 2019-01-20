@@ -767,10 +767,7 @@ NDOMOD_HANDLER_FUNCTION(comment_data)
                  this, but since we're looking for performance here, don't
                  touch it :)
         */
-        ndomod_mysql_query[26] = 's';
-        for (i = 27; i <= 32; i++) {
-            ndomod_mysql_query[i] = ' ';
-        }
+        HACK_SQL_QUERY(26, "s", 27, 32);
 
         PREPARE_SQL();
         BIND();
@@ -826,27 +823,6 @@ NDOMOD_HANDLER_FUNCTION(comment_data)
     }
 }
 
-#define CHECK_2SVC_AND_GET_OBJECT_ID(_check, _svc_check1, _svc_check2, _var, _insert, _hst, _svc) \
-do { \
-    if (_check == _svc_check1 || _check == _svc_check2) { \
-        _var = ndomod_get_object_id(_insert, NDO2DB_OBJECTTYPE_SERVICE, \
-                                    _hst, _svc); \
-    } \
-    else { _ELSE_CHECK_GET_OBJECT_ID(_insert, _var, _hst); } \
-} while (0)
-
-
-#define CHECK_AND_GET_OBJECT_ID(_check, _svc_check, _var, _insert, _hst, _svc) \
-do { \
-    if (_check == _svc_check) { \
-        _var = ndomod_get_object_id(_insert, NDO2DB_OBJECTTYPE_SERVICE, \
-                                    _hst, _svc); \
-    } \
-    else { _ELSE_CHECK_GET_OBJECT_ID(_insert, _var, _hst); } \
-} while (0)
-
-#define _ELSE_CHECK_GET_OBJECT_ID(_insert, _var, _hst) \
-_var = ndomod_get_object_id(_insert, NDO2DB_OBJECTTYPE_HOST, _hst)
 
 NDOMOD_HANDLER_FUNCTION(downtime_data)
 {
@@ -936,9 +912,7 @@ NDOMOD_HANDLER_FUNCTION(downtime_data)
                  we're more concerned with performance. don't touch it unless
                  you know what you're doing :)
         */
-        strcpy(ndomod_mysql_query + 19, "downtimehistory");
-        ndomod_mysql_query[34] = ' ';
-        ndomod_mysql_query[35] = ' ';
+        HACK_SQL_QUERY(19, "downtimehistory", 34, 35);
 
         PREPARE_SQL();
         BIND();
@@ -993,9 +967,7 @@ NDOMOD_HANDLER_FUNCTION(downtime_data)
                  we're more concerned with performance. don't touch it unless
                  you know what you're doing :)
         */
-        strcpy(ndomod_mysql_query + 14, "downtimehistory");
-        ndomod_mysql_query[29] = ' ';
-        ndomod_mysql_query[30] = ' ';
+        HACK_SQL_QUERY(14, "downtimehistory", 29, 30);
 
         PREPARE_SQL();
         BIND();
