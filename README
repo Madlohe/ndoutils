@@ -74,7 +74,8 @@ Here are the current developmental milestones:
 * [ ] Optimize queries
 * [ ] Global flag to stop re-preparing the same query if possible
 * [ ] Periodic MySQL connection checking
-* [ ] Clean up config options (tcp port, ssl, etc. are all irrelevant now)
+* [x] Clean up config options (tcp port, ssl, etc. are all irrelevant now)
+* [x] `get_object_id`, etc.
 
 
 ## Nagios Data Output Utilities

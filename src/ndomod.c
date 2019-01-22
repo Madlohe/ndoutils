@@ -65,8 +65,12 @@ NEB_API_VERSION(CURRENT_NEB_API_VERSION)
 /* Database related */
 /******************************************************************************/
 
+
+/* wrapper for handler function definitions
+   @todo convert these to what they should be - this is confusing */
 #define NDOMOD_HANDLER_FUNCTION(type) \
 void ndomod_handle_##type(nebstruct_##type * data)
+
 
 #define MAX_SQL_BUFFER 4096
 #define MAX_SQL_BINDINGS 64
@@ -74,6 +78,7 @@ void ndomod_handle_##type(nebstruct_##type * data)
 #define MAX_BIND_BUFFER 256
 
 
+/* prepare our sql query */
 #define PREPARE_SQL() \
 do { \
     ndomod_mysql_return = mysql_stmt_prepare(ndomod_mysql_stmt, ndomod_mysql_query, strlen(ndomod_mysql_query)); \
@@ -81,6 +86,7 @@ do { \
         /* handle errors */ \
     } \
 } while (0)
+
 
 /* note: the variadic arguments here are a trick
    see: https://stackoverflow.com/questions/797318/how-to-split-a-string-literal-across-multiple-lines-in-c-objective-c/17996915#17996915 
@@ -99,102 +105,217 @@ do { \
 #define SET_SQL_AND_QUERY(...) \
 todo()
 
+
+/* there is likely a more efficient way to reset the query string @todo */
+
+/* reset the string containing the query */
 #define RESET_QUERY() \
 memset(ndomod_mysql_query, 0, sizeof(ndomod_mysql_query))
 
+
+
+/*
+resets would likely be better suited to:
+not sure if memset all with constant sizes is quicker
+or if detecting the actual appropriate size and then memsetting is quicker
+will need benchmarked @todo
+    memset(ndomod_mysql_bind, 0, (sizeof(ndomod_mysql_bind[0]) * ndomod_mysql_i) + 1);
+    memset(ndomod_mysql_result, 0, (sizeof(ndomod_mysql_result) * ndomod_mysql_result_i) + 1);
+*/
+
+/* reset bindings */
 #define RESET_BIND() \
 do { \
     memset(ndomod_mysql_bind, 0, sizeof(ndomod_mysql_bind)); \
     ndomod_mysql_i = 0; \
 } while (0)
 
+
+/* reset result bindings */
 #define RESET_RESULT_BIND() \
-memset(ndomod_mysql_result, 0, sizeof(ndomod_mysql_result))
-
-
-#define SET_BIND_INT(_buffer) \
 do { \
-    ndomod_mysql_i++; \
-    ndomod_mysql_bind[ndomod_mysql_i].buffer_type = MYSQL_TYPE_LONG; \
-    ndomod_mysql_bind[ndomod_mysql_i].buffer      = &(_buffer); \
-} while(0)
+    memset(ndomod_mysql_result, 0, sizeof(ndomod_mysql_result)); \
+    ndomod_mysql_result_i = 0; \
+} while (0)
 
-#define SET_BIND_LONG(_buffer) SET_BIND_INT(i, _buffer)
 
+/* parameter bindings */
 #define SET_BIND_TINY(_buffer) \
 do { \
-    ndomod_mysql_i++; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_type = MYSQL_TYPE_TINY; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer      = &(_buffer); \
-} while(0)
+    ndomod_mysql_i++; \
+} while (0)
 
 #define SET_BIND_SHORT(_buffer) \
 do { \
-    ndomod_mysql_i++; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_type = MYSQL_TYPE_SHORT; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer      = &(_buffer); \
-} while(0)
+    ndomod_mysql_i++; \
+} while (0)
+
+#define SET_BIND_INT(_buffer) \
+do { \
+    ndomod_mysql_bind[ndomod_mysql_i].buffer_type = MYSQL_TYPE_LONG; \
+    ndomod_mysql_bind[ndomod_mysql_i].buffer      = &(_buffer); \
+    ndomod_mysql_i++; \
+} while (0)
+
+#define SET_BIND_LONG(_buffer) SET_BIND_INT(i, _buffer)
 
 #define SET_BIND_LONGLONG(_buffer) \
 do { \
-    ndomod_mysql_i++; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_type = MYSQL_TYPE_LONGLONG; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer      = &(_buffer); \
-} while(0)
+    ndomod_mysql_i++; \
+} while (0)
 
 #define SET_BIND_FLOAT(_buffer) \
 do { \
-    ndomod_mysql_i++; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_type = MYSQL_TYPE_FLOAT; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer      = &(_buffer); \
-} while(0)
+    ndomod_mysql_i++; \
+} while (0)
 
 #define SET_BIND_DOUBLE(_buffer) \
 do { \
-    ndomod_mysql_i++; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_type = MYSQL_TYPE_DOUBLE; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer      = &(_buffer); \
-} while(0)
+    ndomod_mysql_i++; \
+} while (0)
 
 #define SET_BIND_STR(_buffer) \
 do { \
-    ndomod_mysql_i++; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_type   = MYSQL_TYPE_STRING; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_length = MAX_BIND_BUFFER; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer        = &(_buffer); \
-    ndomod_mysql_bind[ndomod_mysql_i].length        = &(ndomod_mysql_tmp_str_len[i]); \
+    ndomod_mysql_bind[ndomod_mysql_i].length        = &(ndomod_mysql_tmp_str_len[ndomod_mysql_i]); \
     \
-    ndomod_mysql_tmp_str_len[i]               = strlen(_buffer); \
-} while(0)
+    ndomod_mysql_tmp_str_len[ndomod_mysql_i]        = strlen(_buffer); \
+    ndomod_mysql_i++; \
+} while (0)
 
 
+/* result bindings */
+#define SET_RESULT_TINY(_buffer) \
+do { \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_type = MYSQL_TYPE_TINY; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer      = &(_buffer); \
+    ndomod_mysql_result_i++; \
+} while (0)
+
+#define SET_RESULT_SHORT(_buffer) \
+do { \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_type = MYSQL_TYPE_SHORT; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer      = &(_buffer); \
+    ndomod_mysql_result_i++; \
+} while (0)
+
+#define SET_RESULT_INT(_buffer) \
+do { \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_type = MYSQL_TYPE_LONG; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer      = &(_buffer); \
+    ndomod_mysql_result_i++; \
+} while (0)
+
+#define SET_RESULT_LONG(_buffer) SET_RESULT_INT(_buffer)
+
+#define SET_RESULT_LONGLONG(_buffer) \
+do { \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_type = MYSQL_TYPE_LONGLONG; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer      = &(_buffer); \
+    ndomod_mysql_result_i++; \
+} while (0)
+
+#define SET_RESULT_FLOAT(_buffer) \
+do { \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_type = MYSQL_TYPE_FLOAT; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer      = &(_buffer); \
+    ndomod_mysql_result_i++; \
+} while (0)
+
+#define SET_RESULT_DOUBLE(_buffer) \
+do { \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_type = MYSQL_TYPE_DOUBLE; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer      = &(_buffer); \
+    ndomod_mysql_result_i++; \
+} while (0)
+
+#define SET_RESULT_STR(_buffer) \
+do { \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_type   = MYSQL_TYPE_STRING; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer_length = MAX_BIND_BUFFER; \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer        = &(_buffer); \
+    ndomod_mysql_result[ndomod_mysql_result_i].length        = &(ndomod_mysql_tmp_str_len[ndomod_mysql_result_i]); \
+    \
+    ndomod_mysql_tmp_str_len[ndomod_mysql_result_i]          = strlen(_buffer); \
+    ndomod_mysql_result_i++; \
+} while (0)
+
+
+
+/* bind for parameters */
 #define BIND() \
 do { \
     ndomod_mysql_return = mysql_stmt_bind_param(ndomod_mysql_stmt, ndomod_mysql_bind); \
     if (ndomod_mysql_return > 0) { \
         /* handle errors */ \
     } \
-} while(0)
+} while (0)
 
+
+/* bind for results */
 #define RESULT_BIND() \
 do { \
     ndomod_mysql_return = mysql_stmt_bind_result(ndomod_mysql_stmt, ndomod_mysql_result); \
     if (ndomod_mysql_return > 0) { \
         /* handle errors */ \
     } \
-} while(0)
+} while (0)
 
 
-
+/* execute the prepared statement */
 #define QUERY() \
 do { \
     ndomod_mysql_return = mysql_stmt_execute(ndomod_mysql_stmt); \
     if (ndomod_mysql_return > 0) { \
         /* handle errors */ \
     } \
-} while(0)
+} while (0)
 
 
+/* fetch next result,
+   usage:
+
+    ```
+    while (FETCH()) {
+        do_stuff_with_result_binds();
+    }
+    ```
+*/
+#define FETCH() (!mysql_stmt_fetch(ndomod_mysql_stmt))
+
+
+/* store mysql results */
+#define STORE() \
+do {\
+    ndomod_mysql_return = mysql_stmt_store_result(ndomod_mysql_stmt); \
+    if (ndomod_mysql_return > 0) { \
+        /* handle errors */ \
+    } \
+} while (0)
+
+
+/* why use the mysql api when we can just make arbitrary macros? */
+#define NUM_ROWS_INT (int) NUM_ROWS
+#define NUM_ROWS mysql_stmt_num_rows(ndomod_mysql_stmt)
+
+
+/* useful for quickly changing the query text and not having to completely
+   overwrite it 
+   specifically: when there are multiple queries per handler, and they
+   are exactly the same, except for the table name
+   e.g.: scheduleddowntime vs. downtimehistory */
 #define HACK_SQL_QUERY(_overwrite_pos, _overwrite_str, _start_pos, _end_pos) \
 do { \
     int overwrite_i = 0; \
@@ -204,6 +325,8 @@ do { \
     } \
 } while (0)
 
+
+/* macros for ugly get_object_id checks based on variable detection, etc. */
 #define CHECK_2SVC_AND_GET_OBJECT_ID(_check, _svc_check1, _svc_check2, _var, _insert, _hst, _svc) \
 do { \
     if (_check == _svc_check1 || _check == _svc_check2) { \
@@ -212,8 +335,6 @@ do { \
     } \
     else { _ELSE_CHECK_GET_OBJECT_ID(_insert, _var, _hst); } \
 } while (0)
-
-
 
 #define CHECK_AND_GET_OBJECT_ID(_check, _svc_check, _var, _insert, _hst, _svc) \
 do { \
@@ -225,11 +346,13 @@ do { \
 } while (0)
 
 
-
+/* helper macro for the get_object_id wrappers */
 #define _ELSE_CHECK_GET_OBJECT_ID(_insert, _var, _hst) \
 _var = ndomod_get_object_id(_insert, NDO2DB_OBJECTTYPE_HOST, _hst)
 
 
+/* helper function for debugging during development */
+#define MYSQL_DEBUG() do { mysql_dump_debug_info(ndomod_mysql) } while (0)
 /******************************************************************************/
 
 
@@ -253,7 +376,9 @@ MYSQL_BIND ndomod_mysql_result[MAX_SQL_RESULT_BINDINGS];
 int ndomod_mysql_return = 0;
 char ndomod_mysql_query[MAX_SQL_BUFFER] = { 0 };
 long ndomod_mysql_tmp_str_len[MAX_SQL_BINDINGS] = { 0 };
+
 int ndomod_mysql_i = 0;
+int ndomod_mysql_result_i = 0;
 
 
 extern int errno;

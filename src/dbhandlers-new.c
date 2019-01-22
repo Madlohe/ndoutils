@@ -14,6 +14,7 @@ int ndomod_get_object_id(int insert, int object_type, char * name1, char * name2
     }
 
     if (name1 == NULL && name2 == NULL) {
+        printf("return error, bro\n");
         return NDO_ERROR;
     }
 
@@ -34,16 +35,22 @@ int ndomod_get_object_id(int insert, int object_type, char * name1, char * name2
         SET_BIND_STR(name2);
     }
 
-    strcat(ndomod_mysql_query, " LIMIT 1");
+    PREPARE_SQL();
 
     BIND();
-    QUERY();
+    SET_RESULT_INT(result);
+    RESULT_BIND();
 
-    /* todo: this? */
-    if (there_is_object) {
-        return result;
+    QUERY();
+    STORE();
+
+    if (NUM_ROWS_INT == 1) {
+        while (FETCH()) {
+            return result;
+        }
     }
 
+    /* if we shouldn't try and insert, we need to return an error now */
     if (insert == NDO_FALSE) {
         return NDO_ERROR;
     }
@@ -52,16 +59,17 @@ int ndomod_get_object_id(int insert, int object_type, char * name1, char * name2
     RESET_QUERY();
 
     if (name2 == NULL) {
-        snprintf(ndomod_mysql_query, MAX_SQL_BUFFER
+        snprintf(ndomod_mysql_query, MAX_SQL_BUFFER,
             "INSERT INTO nagios_objects (objecttype_id, name1) VALUES (%d, ?)",
             object_type);
     }
     else {
-        snprintf(ndomod_mysql_query, MAX_SQL_BUFFER
+        snprintf(ndomod_mysql_query, MAX_SQL_BUFFER,
             "INSERT INTO nagios_objects (objecttype_id, name1, name2) VALUES (%d, ?, ?)",
             object_type);
     }
 
+    PREPARE_SQL();
     BIND();
     QUERY();
 
@@ -224,8 +232,6 @@ NDOMOD_HANDLER_FUNCTION(log_data)
 }
 
 
-
-// 1980
 NDOMOD_HANDLER_FUNCTION(system_command_data)
 {
     RESET_BIND();
@@ -288,6 +294,7 @@ NDOMOD_HANDLER_FUNCTION(system_command_data)
     BIND();
     QUERY();
 }
+
 
 NDOMOD_HANDLER_FUNCTION(event_handler_data)
 {
@@ -384,6 +391,7 @@ NDOMOD_HANDLER_FUNCTION(event_handler_data)
     QUERY();
 }
 
+
 NDOMOD_HANDLER_FUNCTION(notification_data)
 {
     int object_id = 0;
@@ -456,6 +464,7 @@ NDOMOD_HANDLER_FUNCTION(notification_data)
     BIND();
     QUERY();
 }
+
 
 NDOMOD_HANDLER_FUNCTION(service_check_data)
 {
@@ -672,6 +681,7 @@ NDOMOD_HANDLER_FUNCTION(host_check_data)
     BIND();
     QUERY();
 }
+
 
 NDOMOD_HANDLER_FUNCTION(comment_data)
 {
@@ -1051,4 +1061,70 @@ NDOMOD_HANDLER_FUNCTION(downtime_data)
     default:
         break;
     }
+}
+
+
+NDOMOD_HANDLER_FUNCTION(timed_event_data)
+{
+
+}
+
+
+NDOMOD_HANDLER_FUNCTION(flapping_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(program_status_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(host_status_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(service_status_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(contact_status_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(external_command_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(contact_notification_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(contact_notification_method_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(acknowledgement_data)
+{
+    
+}
+
+
+NDOMOD_HANDLER_FUNCTION(statechange_data)
+{
+    
 }
