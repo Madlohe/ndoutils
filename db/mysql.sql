@@ -874,10 +874,10 @@ CREATE TABLE IF NOT EXISTS `nagios_objects` (
   `instance_id` smallint(6) NOT NULL default '0',
   `objecttype_id` smallint(6) NOT NULL default '0',
   `name1` varchar(128) character set latin1 NOT NULL default '',
-  `name2` varchar(128) character set latin1 default NULL,
+  `name2` varchar(128) character set latin1 NOT NULL default '',
   `is_active` smallint(6) NOT NULL default '0',
   PRIMARY KEY  (`object_id`),
-  KEY `objecttype_id` (`objecttype_id`,`name1`,`name2`)
+  UNIQUE KEY `objecttype_id` (`objecttype_id`,`name1`,`name2`)
 ) ENGINE=MyISAM  COMMENT='Current and historical objects of all kinds';
 
 -- --------------------------------------------------------
@@ -1008,7 +1008,6 @@ CREATE TABLE IF NOT EXISTS `nagios_servicechecks` (
   `long_output` TEXT NOT NULL default '',
   `perfdata` TEXT character set latin1 NOT NULL default '',
   PRIMARY KEY  (`servicecheck_id`),
-  KEY `instance_id` (`instance_id`),
   KEY `service_object_id` (`service_object_id`),
   KEY `start_time` (`start_time`)
 ) ENGINE=MyISAM  COMMENT='Historical service checks';

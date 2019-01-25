@@ -127,55 +127,124 @@ void ndomod_set_all_objects_as_inactive()
 }
 
 
-NDOMOD_HANDLER_FUNCTION(process_data)
+
+void ndomod_write_config_file()
 {
-    char * program_name              = strdup("Nagios");
-    char * program_version           = strdup(get_program_version());
-    char * program_modification_date = strdup(get_program_modification_date());
-    int program_pid                  = (int) getpid();
+    char line_buffer[NDO_MAX_BUFLEN] = { 0 };
+    FILE * fp = NULL;
+    char * key = NULL;
+    char * value = NULL;
+    int free_value = NDO_FALSE;
 
-    if (name == NULL || version == NULL || modification_date == NULL) {
-        ndomod_write_to_logs("Unable to allocate memory for process data", NSLOG_INFO_MESSAGE);
+    fp = fopen(config_file, "r");
+
+    /* @todo: this function should *really* return a value of some kind... */
+    if (fp == NULL) {
         return;
-    }
-
-    if (data->type == NEBTYPE_PROCESS_START) {
-        ndomod_write_active_objects();
     }
 
     RESET_BIND();
 
+    /* configfile_type = 0 is a relic - not sure it is required
+       to be honest, this function should do more than it does. */
+
     SET_SQL(
             INSERT INTO
-                nagios_processevents
+                nagios_configfiles
             SET
                 instance_id     = 1,
-                event_type      = ?
-                event_time      = FROM_UNIXTIME(?),
-                event_time_usec = ?,
-                process_id      = ?
-                program_name    = ?
-                program_version = ?
-                program_date    = ?
+                configfile_type = 0,
+                configfile_path = ?
+            ON DUPLICATE KEY UPDATE
+                instance_id     = 1,
+                configfile_type = 0,
+                configfile_path = ?
             );
 
-    SET_BIND_INT(data->type);
-    SET_BIND_INT(data->timestamp.tv_sec);
-    SET_BIND_INT(data->timestamp.tv_usec);
-    SET_BIND_INT(program_pid);
-    SET_BIND_STR(program_name);
-    SET_BIND_STR(program_version);
-    SET_BIND_STR(program_modification_date);
+    SET_BIND_STR(config_file);
+    SET_BIND_STR(config_file);
 
     BIND();
     QUERY();
+
+    snprintf(ndomod_mysql_query, MAX_SQL_BUFFER,
+        "INSERT INTO nagios_configfilevariables"
+        " (instance_id, configfile_id, varname, varvalue) "
+        "VALUES (1, %d, ?, ?)",
+        config_file_id);
+
+    PREPARE_SQL();
+
+    while (fgets(line_buffer, sizeof(NDO_MAX_BUFLEN), fp) != NULL) {
+
+        switch (line_buffer[0]) {
+
+        /* skip null */
+        case 0:
+
+        /* skip newlines */
+        case '\n':
+        case '\r':
+
+        /* skip comments */
+        /* original ndomod stripped the text before checking for these
+           but that is just as bad as checking them as the first char, since
+           they can occur at any point in a string... not only that it didn't
+           work properly */
+        case '#':
+        case ';':
+            continue;
+        }
+
+        key = strtok(line_buffer, "=");
+        if (key == NULL) {
+            continue;
+        }
+
+        value = strtok(NULL, "\n");
+        if (value == NULL) {
+            value = strdup("");
+            free_value = NDO_TRUE;
+        }
+
+        /* @todo - we could optimize this to only do the steps necessary
+                   instead of all the other mysql stuff going on */
+        SET_BIND_STR(key);
+        SET_BIND_STR(value);
+
+        BIND();
+        QUERY();
+
+        /* skip a reset_bind in favor of not memsetting() bind vars */
+        ndomod_mysql_i = 0;
+    }
+}
+
+
+NDOMOD_HANDLER_FUNCTION(process_data)
+{
+    char * program_name              = "Nagios";
+    char * program_version           = get_program_version();
+    char * program_modification_date = get_program_modification_date();
+    int program_pid                  = (int) getpid();
+
 
     if (data->type == NEBTYPE_PROCESS_PRELAUNCH) {
         ndomod_clear_tables();
         ndomod_set_all_objects_as_inactive();
     }
 
-    if (data->type == NEBTYPE_PROCESS_SHUTDOWN || data->type == NEBTYPE_PROCESS_RESTART) {
+    else if (data->type == NEBTYPE_PROCESS_START) {
+        ndomod_write_active_objects();
+        ndomod_write_config_file();
+        ndomod_write_object_config(NDOMOD_CONFIG_DUMP_ORIGINAL);
+    }
+
+    else if (data->type == NEBTYPE_PROCESS_EVENTLOOPSTART) {
+        ndomod_write_runtime_variables();
+    }
+
+    else if (data->type == NEBTYPE_PROCESS_SHUTDOWN || data->type == NEBTYPE_PROCESS_RESTART) {
 
         RESET_BIND();
 
@@ -192,9 +261,226 @@ NDOMOD_HANDLER_FUNCTION(process_data)
         BIND();
         QUERY();
     }
+
+    RESET_BIND();
+
+    SET_SQL(
+            INSERT INTO
+                nagios_processevents
+            SET
+                instance_id     = 1,
+                event_type      = ?
+                event_time      = FROM_UNIXTIME(?),
+                event_time_usec = ?,
+                process_id      = ?
+                program_name    = 'Nagios'
+                program_version = ?
+                program_date    = ?
+            );
+
+    SET_BIND_INT(data->type);
+    SET_BIND_INT(data->timestamp.tv_sec);
+    SET_BIND_INT(data->timestamp.tv_usec);
+    SET_BIND_INT(program_pid);
+    SET_BIND_STR(program_version);
+    SET_BIND_STR(program_modification_date);
+
+    BIND();
+    QUERY();
 }
 
 
+/* @todo move this where it belongs */
+#define MAX_ROW_BUFFER_ACTIVE 11
+
+
+NDOMOD_HANDLER_FUNCTION(retention_data)
+{
+    if (data->type == NEBTYPE_RETENTIONDATA_ENDLOAD) {
+        ndomod_write_object_config(NDOMOD_CONFIG_DUMP_RETAINED);
+    }
+}
+
+void ndomod_write_active_objects()
+{
+    ndomod_write_objects(NDOMOD_OBJECT_ACTIVE, NDOMOD_CONFIG_DUMP_ALL);
+}
+
+void ndomod_write_object_config(int config_type)
+{
+    ndomod_write_objects(NDOMOD_OBJECT_CONFIG, config_type);
+}
+
+void ndomod_write_objects(int write_type, int config_type)
+{
+    char * tmp[MAX_SQL_BUFFER] = { 0 };
+    int i = 0;
+    int pos = 0;
+
+    if (write_type == NDOMOD_OBJECT_CONFIG
+        && !(ndomod_config_output_options & config_type)) {
+
+        return;
+    }
+
+    /*
+        the steps for all types of objects below are very similar
+
+        1. determine if we have enough space in the query buffer to just
+           send everything in 1 statement
+        2. or.. determine how many queries we need to send based on our
+           buffer size and/or object count
+        3. we do all this based on the write_type, as well (active or config)
+           ..and to be efficient, we need to keep track of certain parts
+           of where things happen in the query (like where the INSERT INTO table
+           ends, for example)
+
+    */
+
+
+    /* where does the insert clause end?
+
+        INSERT INTO table (col1, col2) VALUES (1, 2), (2, 3) ON DUPLICATE UPDATE col3 = col1 + col2
+it would normally be considered here ^       ^ but we count it here for ... reasons
+
+    */
+    int insert_clause_len = 0;
+
+
+    /* where does the on duplicate clause begin?
+
+        INSERT INTO table (col1, col2) VALUES (1, 2), (2, 3) ON DUPLICATE UPDATE col3 = col1 + col2;
+                                                             ^
+    */
+    int on_duplicate_clause_pos = 0;
+
+
+    /* how long is one of the row inserts?
+
+        INSERT INTO table (col1, col2) VALUES (1,2),(2,3) ON DUPLICATE UPDATE col3 = col1 + col2;
+                                              ^----^
+
+        for nagios_objects, as an example:
+            if objecttype_id <= 9,           it is '(9,?,?),'  ( 8 )
+            if objecttype_id >= 10 && <= 99, it is '(99,?,?),' ( 9 )
+        ..and so on..
+    */
+    int values_clause_row_length = 0;
+
+
+    /* how many rows are being inserted simultaneously?
+
+        INSERT INTO table (col1, col2) VALUES (1, 2), (2, 3) ON DUPLICATE UPDATE col3 = col1 + col2;
+                                                +1       +1  ( = *2* )
+    */
+    int inserted_row_count = 0;
+
+    /* these NEVER change */
+    char * on_duplicate_clause  = " ON DUPLICATE KEY UPDATE is_active=1";
+    int on_duplicate_clause_len = 36;
+
+
+    /* we can just calculate this for easy conditionals during the object
+       insertions below */
+    int room_for_rows = 0;
+
+    /* MAX_ROW_BUFFER_ACTIVE allows for an objecttype_id that is 3 digits (999)
+       "(999,?,?)," */
+    char row_buffer_active[MAX_ROW_BUFFER_ACTIVE];
+    int row_buffer_active_len = MAX_ROW_BUFFER_ACTIVE;
+
+
+    /* all this math looks something like this:
+
+        fullquery = "INSERT INTO tbl1 (c1, c2) VALUES                                                          ON DUPLICATE KEY UPDATE something=1"
+
+        strlen(fullquery) = 125
+        strlen(insert_portion) = 33
+        strlen(on_duplicate_portion) = 36 
+
+        125 - 33 - 36 = 56
+
+        strlen("(?,?),") = 6
+
+        // +1 for final comma
+        (56+1)/6 = 9.5 = 9
+    */
+int rows_bound = 0;
+int object_count = 0;
+int objects_left = 0;
+
+char * blank_str = "";
+
+    {
+        command * tmp = command_list;
+
+
+        if (write_type == NDOMOD_OBJECT_ACTIVE) {
+
+            /* @todo preliminary testing reveals i can do table(vols)values()
+                     with no spaces o.o - dare i? */
+            SET_SQL(INSERT INTO nagios_objects (objecttype_id,name1,name2) VALUES );
+            insert_clause_len = strlen(ndomod_mysql_query);
+
+            /* @todo optimize this for a strcpy, plz */
+            snprintf(row_buffer, MAX_ROW_BUFFER_ACTIVE - 1, "(%d,?,?),",
+                     NDO2DB_OBJECTTYPE_COMMAND);
+
+            if (NDO2DB_OBJECTTYPE_COMMAND < 10) {
+                row_buffer_active_len -= 2;
+            }
+            else if (NDO2DB_OBJECTTYPE_COMMAND < 100) {
+                row_buffer_active_len -= 1;                
+            }
+
+            room_for_rows = MAX_SQL_BUFFER - 1
+                            - on_duplicate_clause_len
+                            - insert_clause_len;
+
+            max_inserts = (room_for_rows + 1) / row_buffer_active_len;
+
+            /* this was easy enough then */
+            if (num_objects.commands <= max_inserts) {
+                max_inserts = num_objects.commands;
+            }
+        }
+
+        while (tmp != NULL) {
+
+            objects_left = num_objects.commands - object_count;
+
+            if (rows_bound > max_inserts) {
+
+                BIND();
+                QUERY();
+
+                rows_bound = 0;
+
+                /* skip out on reset_bind.. so we don't waste time with
+                   memset */
+                ndomod_mysql_i = 0;
+            }
+
+            /* we need to adjust how many of our rows are in the query now */
+            if (objects_left < max_inserts) {
+
+            }
+
+            if (write_type == NDOMOD_OBJECT_ACTIVE) {
+
+/* NOTES FOR LATER:
+
+    bryan, you need to have 2 seperate row_buffer_actives - 1 for 1s with name1 only
+    and others that include both name1 and name2, it'll make this way easier */
+                SET_BIND_STR
+            }
+
+            tmp = tmp->next;
+            object_count++;
+            rows_bound++;
+        }
+    }
+}
 
 NDOMOD_HANDLER_FUNCTION(log_data)
 {

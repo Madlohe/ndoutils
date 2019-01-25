@@ -72,10 +72,13 @@ Here are the current developmental milestones:
       * [ ] `NEBTYPE_RETENTIONDATA_ENDLOAD`
 * [ ] Deprecate `instance_id`
 * [ ] Optimize queries
+  * [ ] Remove all unnecessary `KEY`s
 * [ ] Global flag to stop re-preparing the same query if possible
 * [ ] Periodic MySQL connection checking
 * [x] Clean up config options (tcp port, ssl, etc. are all irrelevant now)
 * [x] `get_object_id`, etc.
+* [ ] Grab `max_allowed_packet` on startup, switch buffer to heap so we
+      can utilize truly large queries where it matters (it does)
 
 
 ## Nagios Data Output Utilities

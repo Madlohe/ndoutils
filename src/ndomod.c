@@ -72,10 +72,13 @@ NEB_API_VERSION(CURRENT_NEB_API_VERSION)
 void ndomod_handle_##type(nebstruct_##type * data)
 
 
+/* @todo this should be a string based on reading max_allowed_packet
+         once we connect to mysql. it's dumb to limit it so arbitrarily */
 #define MAX_SQL_BUFFER 4096
 #define MAX_SQL_BINDINGS 64
 #define MAX_SQL_RESULT_BINDINGS 16
 #define MAX_BIND_BUFFER 256
+#define MAX_INSERT_VALUES 250
 
 
 /* prepare our sql query */
@@ -103,7 +106,10 @@ do { \
 /* this is a straight query, with no parameters for binding. it is 
    slightly more efficient than preparing when isn't necessary */
 #define SET_SQL_AND_QUERY(...) \
-todo()
+do { \
+    SET_SQL(#__VA_ARGS__); \
+    QUERY(); \
+} while (0);
 
 
 /* there is likely a more efficient way to reset the query string @todo */
@@ -188,7 +194,7 @@ do { \
 do { \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_type   = MYSQL_TYPE_STRING; \
     ndomod_mysql_bind[ndomod_mysql_i].buffer_length = MAX_BIND_BUFFER; \
-    ndomod_mysql_bind[ndomod_mysql_i].buffer        = &(_buffer); \
+    ndomod_mysql_bind[ndomod_mysql_i].buffer        = _buffer; \
     ndomod_mysql_bind[ndomod_mysql_i].length        = &(ndomod_mysql_tmp_str_len[ndomod_mysql_i]); \
     \
     ndomod_mysql_tmp_str_len[ndomod_mysql_i]        = strlen(_buffer); \
@@ -245,7 +251,7 @@ do { \
 do { \
     ndomod_mysql_result[ndomod_mysql_result_i].buffer_type   = MYSQL_TYPE_STRING; \
     ndomod_mysql_result[ndomod_mysql_result_i].buffer_length = MAX_BIND_BUFFER; \
-    ndomod_mysql_result[ndomod_mysql_result_i].buffer        = &(_buffer); \
+    ndomod_mysql_result[ndomod_mysql_result_i].buffer        = _buffer; \
     ndomod_mysql_result[ndomod_mysql_result_i].length        = &(ndomod_mysql_tmp_str_len[ndomod_mysql_result_i]); \
     \
     ndomod_mysql_tmp_str_len[ndomod_mysql_result_i]          = strlen(_buffer); \
@@ -982,6 +988,12 @@ int ndomod_broker_data(int event_type, void * data)
         break;
 
 
+    case NEBCALLBACK_RETENTION_DATA:
+
+        ndomod_handle_statechange_data(data);
+        break;
+
+
     case NEBCALLBACK_TIMED_EVENT_DATA:
 
         ndomod_handle_timed_event_data(data);
@@ -1102,47 +1114,7 @@ int ndomod_broker_data(int event_type, void * data)
     case NEBCALLBACK_ADAPTIVE_SERVICE_DATA:
     case NEBCALLBACK_ADAPTIVE_CONTACT_DATA:
     case NEBCALLBACK_AGGREGATED_STATUS_DATA:
-    case NEBCALLBACK_RETENTION_DATA:
     */
-    }
-
-    /* POST PROCESSING... */
-
-    switch(event_type) {
-
-    case NEBCALLBACK_PROCESS_DATA:
-
-        ndomod_handle_process_data(data);
-
-        /* process has passed pre-launch config verification, so dump original config */
-        if (procdata->type == NEBTYPE_PROCESS_START) {
-
-            ndomod_write_config_files();
-            ndomod_write_config(NDOMOD_CONFIG_DUMP_ORIGINAL);
-        }
-
-        /* process is starting the event loop, so dump runtime vars */
-        if (procdata->type == NEBTYPE_PROCESS_EVENTLOOPSTART) {
-
-            ndomod_write_runtime_variables();
-        }
-
-        break;
-
-    case NEBCALLBACK_RETENTION_DATA:
-
-        ndomod_handle_retention_data(data);
-
-        /* retained config was just read, so dump it */
-        if (rdata->type == NEBTYPE_RETENTIONDATA_ENDLOAD) {
-
-            ndomod_write_config(NDOMOD_CONFIG_DUMP_RETAINED);
-        }
-
-        break;
-
-    default:
-        break;
     }
 
     return 0;
