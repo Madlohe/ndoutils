@@ -311,174 +311,91 @@ void ndomod_write_object_config(int config_type)
     ndomod_write_objects(NDOMOD_OBJECT_CONFIG, config_type);
 }
 
+#define SET_SQL_ACTIVE_OBJECT_NAME1(obj_type_id) \
+    snprintf(ndomod_mysql_query, MAX_SQL_BUFFER - 1, \
+                     "INSERT INTO nagios_objects" \
+                     "(objecttype_id,name1)VALUES(%d,?)", \
+                     obj_type_id); \
+    /* length of ndomod_mysql_query now */ \
+    ndomod_mysql_query[59] = 0; \
+    PREPARE_SQL(); \
+
+#define INSERT_ACTIVE_OBJECT_NAME1(name1) \
+        ndomod_mysql_i = 0; \
+        SET_BIND_STR(name1); \
+        BIND(); \
+        QUERY();
+
+#define SET_SQL_ACTIVE_OBJECT_NAME2(obj_type_id) \
+    snprintf(ndomod_mysql_query, MAX_SQL_BUFFER - 1, \
+                     "INSERT INTO nagios_objects" \
+                     "(objecttype_id,name1,name2)VALUES(%d,?,?)", \
+                     obj_type_id); \
+    /* length of ndomod_mysql_query now */ \
+    ndomod_mysql_query[67] = 0; \
+    PREPARE_SQL(); \
+
+#define INSERT_ACTIVE_OBJECT_NAME2(name1, name2) \
+        ndomod_mysql_i = 0; \
+        SET_BIND_STR(name1); \
+        SET_BIND_STR(name2); \
+        BIND(); \
+        QUERY();
+
+#define WRITE_ACTIVE_OBJECT_TYPE(type) \
+    type * tmp = type##_list;
+
+#define WRITE_ACTIVE_OBJECT_START_LOOP() \
+\
+    while (tmp != NULL) {
+
+#define WRITE_ACTIVE_OBJECT_END_LOOP() \
+\
+        tmp = tmp->next; \
+    }
+
+#define WRITE_ACTIVE_OBJECT_NAME1(type, obj_type_id, name1) \
+do { \
+    WRITE_ACTIVE_OBJECT_TYPE(type) \
+    SET_SQL_ACTIVE_OBJECT_NAME1(object_type) \
+    WRITE_ACTIVE_OBJECT_START_LOOP() \
+        INSERT_ACTIVE_OBJECT_NAME1(tmp->name1) \
+    WRITE_ACTIVE_OBJECT_END_LOOP() \
+} while (0)
+
+#define WRITE_ACTIVE_OBJECT_NAME2(type, obj_type_id, name1, name2) \
+do { \
+    WRITE_ACTIVE_OBJECT_TYPE(type) \
+    SET_SQL_ACTIVE_OBJECT_NAME1(object_type) \
+    WRITE_ACTIVE_OBJECT_START_LOOP() \
+        INSERT_ACTIVE_OBJECT_NAME2(tmp->name1, tmp->name2) \
+    WRITE_ACTIVE_OBJECT_END_LOOP() \
+} while (0)
+
 void ndomod_write_objects(int write_type, int config_type)
 {
-    char * tmp[MAX_SQL_BUFFER] = { 0 };
-    int i = 0;
-    int pos = 0;
-
     if (write_type == NDOMOD_OBJECT_CONFIG
         && !(ndomod_config_output_options & config_type)) {
 
         return;
     }
 
-    /*
-        the steps for all types of objects below are very similar
+    /* screw the optimization for now.
+       i'll come back to it
 
-        1. determine if we have enough space in the query buffer to just
-           send everything in 1 statement
-        2. or.. determine how many queries we need to send based on our
-           buffer size and/or object count
-        3. we do all this based on the write_type, as well (active or config)
-           ..and to be efficient, we need to keep track of certain parts
-           of where things happen in the query (like where the INSERT INTO table
-           ends, for example)
-
+       see: https://github.com/NagiosEnterprises/ndoutils/commit/87aa66e
     */
 
+    if (write_type == NDOMOD_OBJECT_ACTIVE) {
 
-    /* where does the insert clause end?
-
-        INSERT INTO table (col1, col2) VALUES (1, 2), (2, 3) ON DUPLICATE UPDATE col3 = col1 + col2
-it would normally be considered here ^       ^ but we count it here for ... reasons
-
-    */
-    int insert_clause_len = 0;
-
-
-    /* where does the on duplicate clause begin?
-
-        INSERT INTO table (col1, col2) VALUES (1, 2), (2, 3) ON DUPLICATE UPDATE col3 = col1 + col2;
-                                                             ^
-    */
-    int on_duplicate_clause_pos = 0;
-
-
-    /* how long is one of the row inserts?
-
-        INSERT INTO table (col1, col2) VALUES (1,2),(2,3) ON DUPLICATE UPDATE col3 = col1 + col2;
-                                              ^----^
-
-        for nagios_objects, as an example:
-            if objecttype_id <= 9,           it is '(9,?,?),'  ( 8 )
-            if objecttype_id >= 10 && <= 99, it is '(99,?,?),' ( 9 )
-        ..and so on..
-    */
-    int values_clause_row_length = 0;
-
-
-    /* how many rows are being inserted simultaneously?
-
-        INSERT INTO table (col1, col2) VALUES (1, 2), (2, 3) ON DUPLICATE UPDATE col3 = col1 + col2;
-                                                +1       +1  ( = *2* )
-    */
-    int inserted_row_count = 0;
-
-    /* these NEVER change */
-    char * on_duplicate_clause  = " ON DUPLICATE KEY UPDATE is_active=1";
-    int on_duplicate_clause_len = 36;
-
-
-    /* we can just calculate this for easy conditionals during the object
-       insertions below */
-    int room_for_rows = 0;
-
-    /* MAX_ROW_BUFFER_ACTIVE allows for an objecttype_id that is 3 digits (999)
-       "(999,?,?)," */
-    char row_buffer_active[MAX_ROW_BUFFER_ACTIVE];
-    int row_buffer_active_len = MAX_ROW_BUFFER_ACTIVE;
-
-
-    /* all this math looks something like this:
-
-        fullquery = "INSERT INTO tbl1 (c1, c2) VALUES                                                          ON DUPLICATE KEY UPDATE something=1"
-
-        strlen(fullquery) = 125
-        strlen(insert_portion) = 33
-        strlen(on_duplicate_portion) = 36 
-
-        125 - 33 - 36 = 56
-
-        strlen("(?,?),") = 6
-
-        // +1 for final comma
-        (56+1)/6 = 9.5 = 9
-    */
-int rows_bound = 0;
-int object_count = 0;
-int objects_left = 0;
-
-char * blank_str = "";
-
-    {
-        command * tmp = command_list;
-
-
-        if (write_type == NDOMOD_OBJECT_ACTIVE) {
-
-            /* @todo preliminary testing reveals i can do table(vols)values()
-                     with no spaces o.o - dare i? */
-            SET_SQL(INSERT INTO nagios_objects (objecttype_id,name1,name2) VALUES );
-            insert_clause_len = strlen(ndomod_mysql_query);
-
-            /* @todo optimize this for a strcpy, plz */
-            snprintf(row_buffer, MAX_ROW_BUFFER_ACTIVE - 1, "(%d,?,?),",
-                     NDO2DB_OBJECTTYPE_COMMAND);
-
-            if (NDO2DB_OBJECTTYPE_COMMAND < 10) {
-                row_buffer_active_len -= 2;
-            }
-            else if (NDO2DB_OBJECTTYPE_COMMAND < 100) {
-                row_buffer_active_len -= 1;                
-            }
-
-            room_for_rows = MAX_SQL_BUFFER - 1
-                            - on_duplicate_clause_len
-                            - insert_clause_len;
-
-            max_inserts = (room_for_rows + 1) / row_buffer_active_len;
-
-            /* this was easy enough then */
-            if (num_objects.commands <= max_inserts) {
-                max_inserts = num_objects.commands;
-            }
-        }
-
-        while (tmp != NULL) {
-
-            objects_left = num_objects.commands - object_count;
-
-            if (rows_bound > max_inserts) {
-
-                BIND();
-                QUERY();
-
-                rows_bound = 0;
-
-                /* skip out on reset_bind.. so we don't waste time with
-                   memset */
-                ndomod_mysql_i = 0;
-            }
-
-            /* we need to adjust how many of our rows are in the query now */
-            if (objects_left < max_inserts) {
-
-            }
-
-            if (write_type == NDOMOD_OBJECT_ACTIVE) {
-
-/* NOTES FOR LATER:
-
-    bryan, you need to have 2 seperate row_buffer_actives - 1 for 1s with name1 only
-    and others that include both name1 and name2, it'll make this way easier */
-                SET_BIND_STR
-            }
-
-            tmp = tmp->next;
-            object_count++;
-            rows_bound++;
-        }
+        WRITE_ACTIVE_OBJECT_NAME1(command, object_type, name);
+        WRITE_ACTIVE_OBJECT_NAME1(timeperiod, object_type, name);
+        WRITE_ACTIVE_OBJECT_NAME1(contact, object_type, name);
+        WRITE_ACTIVE_OBJECT_NAME1(contactgroup, object_type, group_name);
+        WRITE_ACTIVE_OBJECT_NAME1(host, object_type, name);
+        WRITE_ACTIVE_OBJECT_NAME1(hostgroup, object_type, group_name);
+        WRITE_ACTIVE_OBJECT_NAME2(service, object_type, host_name, service_description);
+        WRITE_ACTIVE_OBJECT_NAME1(servicegroup, object_type, group_name);
     }
 }
 
