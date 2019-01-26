@@ -311,6 +311,7 @@ void ndomod_write_object_config(int config_type)
     ndomod_write_objects(NDOMOD_OBJECT_CONFIG, config_type);
 }
 
+
 #define SET_SQL_ACTIVE_OBJECT_NAME1(obj_type_id) \
     snprintf(ndomod_mysql_query, MAX_SQL_BUFFER - 1, \
                      "INSERT INTO nagios_objects" \
@@ -320,11 +321,13 @@ void ndomod_write_object_config(int config_type)
     ndomod_mysql_query[59] = 0; \
     PREPARE_SQL(); \
 
+
 #define INSERT_ACTIVE_OBJECT_NAME1(name1) \
         ndomod_mysql_i = 0; \
         SET_BIND_STR(name1); \
         BIND(); \
         QUERY();
+
 
 #define SET_SQL_ACTIVE_OBJECT_NAME2(obj_type_id) \
     snprintf(ndomod_mysql_query, MAX_SQL_BUFFER - 1, \
@@ -335,6 +338,7 @@ void ndomod_write_object_config(int config_type)
     ndomod_mysql_query[67] = 0; \
     PREPARE_SQL(); \
 
+
 #define INSERT_ACTIVE_OBJECT_NAME2(name1, name2) \
         ndomod_mysql_i = 0; \
         SET_BIND_STR(name1); \
@@ -342,17 +346,21 @@ void ndomod_write_object_config(int config_type)
         BIND(); \
         QUERY();
 
+
 #define WRITE_ACTIVE_OBJECT_TYPE(type) \
     type * tmp = type##_list;
+
 
 #define WRITE_ACTIVE_OBJECT_START_LOOP() \
 \
     while (tmp != NULL) {
 
+
 #define WRITE_ACTIVE_OBJECT_END_LOOP() \
 \
         tmp = tmp->next; \
     }
+
 
 #define WRITE_ACTIVE_OBJECT_NAME1(type, obj_type_id, name1) \
 do { \
@@ -363,6 +371,7 @@ do { \
     WRITE_ACTIVE_OBJECT_END_LOOP() \
 } while (0)
 
+
 #define WRITE_ACTIVE_OBJECT_NAME2(type, obj_type_id, name1, name2) \
 do { \
     WRITE_ACTIVE_OBJECT_TYPE(type) \
@@ -372,14 +381,9 @@ do { \
     WRITE_ACTIVE_OBJECT_END_LOOP() \
 } while (0)
 
+
 void ndomod_write_objects(int write_type, int config_type)
 {
-    if (write_type == NDOMOD_OBJECT_CONFIG
-        && !(ndomod_config_output_options & config_type)) {
-
-        return;
-    }
-
     /* screw the optimization for now.
        i'll come back to it
 
@@ -396,6 +400,172 @@ void ndomod_write_objects(int write_type, int config_type)
         WRITE_ACTIVE_OBJECT_NAME1(hostgroup, object_type, group_name);
         WRITE_ACTIVE_OBJECT_NAME2(service, object_type, host_name, service_description);
         WRITE_ACTIVE_OBJECT_NAME1(servicegroup, object_type, group_name);
+    }
+
+    else if (write_type == NDOMOD_OBJECT_CONFIG) {
+
+        if (!(ndomod_config_output_options & config_type)) {
+            return;
+        }
+
+        /********************************************************************
+            commands
+        ********************************************************************/
+        {
+            command * tmp = command_list;
+            int object_id = 0;
+
+            RESET_BIND();
+            SET_SQL(INSERT INTO 
+                        nagios_commands
+                    SET
+                        instance_id  = 1,
+                        object_id    = ?,
+                        config_type  = ?,
+                        command_line = ?
+                    ON DUPLICATE KEY UPDATE
+                        instance_id  = 1,
+                        object_id    = ?,
+                        config_type  = ?,
+                        command_line = ?
+                    );
+
+            while (tmp != NULL) {
+
+                /* we don't need to memset(0) since it's the same amount
+                   of arguments each time */
+                ndomod_mysql_i = 0;
+
+                /* @todo - it may be worth it to see if there is a better way
+                           to do this, it will require some benchmarking,
+                           but it might be nicer to just put a subquery in
+                           and let sql handle the processing aspect */
+                object_id = ndomod_get_object_id(NDO_TRUE, 
+                                                 NDO2DB_OBJECTTYPE_COMMAND,
+                                                 tmp->name,
+                                                 NULL);
+
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(config_type);
+                SET_BIND_STR(tmp->command_line);
+
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(config_type);
+                SET_BIND_STR(tmp->command_line);
+
+                BIND();
+                QUERY();
+
+                tmp = tmp->next;
+            }
+        }
+
+        /********************************************************************
+            timeperiods and ranges
+        ********************************************************************/
+        {
+            timeperiod * tmp  = timeperiod_list;
+            timerange * range = NULL;
+
+            int object_id = 0;
+            int day = 0;
+
+            /* if you have more than 2k timeperiods, you're doing it wrong.. */
+            int timeperiod_ids[2048];
+            int i = 0;
+
+            RESET_BIND();
+            SET_SQL(INSERT INTO 
+                        nagios_timeperiods
+                    SET
+                        instance_id          = 1,
+                        timeperiod_object_id = ?,
+                        config_type          = ?,
+                        alias                = ?
+                    ON DUPLICATE KEY UPDATE
+                        instance_id          = 1,
+                        timeperiod_object_id = ?,
+                        config_type          = ?,
+                        alias                = ?
+                    );
+
+            while (tmp != NULL) {
+
+                ndomod_mysql_i = 0;
+
+                object_id = ndomod_get_object_id(NDO_TRUE, 
+                                                 NDO2DB_OBJECTTYPE_TIMEPERIOD,
+                                                 tmp->name,
+                                                 NULL);
+
+                /* store this for later lookup */
+                timeperiod_ids[i] = object_id;
+                i++;
+
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(config_type);
+                SET_BIND_STR(tmp->alias);
+
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(config_type);
+                SET_BIND_STR(tmp->alias);
+
+                BIND();
+                QUERY();
+
+                tmp = tmp->next;
+            }
+
+            /* loop back over for time ranges */
+            tmp = timeperiod_list;
+            i   = 0;
+
+            RESET_BIND();
+            SET_SQL(INSERT INTO 
+                        nagios_timeperiod_timeranges
+                    SET
+                        instance_id   = 1,
+                        timeperiod_id = ?,
+                        day           = ?,
+                        start_sec     = ?,
+                        end_sec       = ?
+                    ON DUPLICATE KEY UPDATE
+                        instance_id   = 1,
+                        timeperiod_id = ?,
+                        day           = ?,
+                        start_sec     = ?,
+                        end_sec       = ?
+                    );
+
+            while (tmp != NULL) {
+
+                object_id = timeperiod_ids[i];
+
+                for (day = 0; day < 7; day++) {
+
+                    range = tmp->days[day];
+                
+                    ndomod_mysql_i = 0;
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(day);
+                    SET_BIND_INT(range->range_start);
+                    SET_BIND_INT(range->range_end);
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(day);
+                    SET_BIND_INT(range->range_start);
+                    SET_BIND_INT(range->range_end);
+
+                    BIND();
+                    QUERY();
+                }
+
+                i++;
+                tmp = tmp->next;
+            }
+        }
+
     }
 }
 
