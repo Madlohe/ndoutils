@@ -566,6 +566,168 @@ void ndomod_write_objects(int write_type, int config_type)
             }
         }
 
+        /********************************************************************
+            contacts and contact addresses
+        ********************************************************************/
+        {
+            contact * tmp  = contact_list;
+            int object_id = 0;
+
+            int i = 0;
+
+            /* there are eleven of them */
+            int notify_options[11] = { 0 };
+
+            RESET_BIND();
+            SET_SQL(
+                    INSERT INTO
+                        nagios_contacts
+                    SET
+                        instance_id                   = 1,
+                        config_type                   = ?,
+                        contact_object_id             = ?,
+                        alias                         = ?,
+                        email_address                 = ?,
+                        pager_address                 = ?,
+                        host_timeperiod_object_id     = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                        service_timeperiod_object_id  = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                        host_notifications_enabled    = ?,
+                        service_notifications_enabled = ?,
+                        can_submit_commands           = ?,
+                        notify_service_recovery       = ?,
+                        notify_service_warning        = ?,
+                        notify_service_unknown        = ?,
+                        notify_service_critical       = ?,
+                        notify_service_flapping       = ?,
+                        notify_service_downtime       = ?,
+                        notify_host_recovery          = ?,
+                        notify_host_down              = ?,
+                        notify_host_unreachable       = ?,
+                        notify_host_flapping          = ?,
+                        notify_host_downtime          = ?,
+                        minimum_importance            = ?
+                    ON DUPLICATE KEY UPDATE
+                        instance_id                   = 1,
+                        config_type                   = ?,
+                        contact_object_id             = ?,
+                        alias                         = ?,
+                        email_address                 = ?,
+                        pager_address                 = ?,
+                        host_timeperiod_object_id     = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                        service_timeperiod_object_id  = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                        host_notifications_enabled    = ?,
+                        service_notifications_enabled = ?,
+                        can_submit_commands           = ?,
+                        notify_service_recovery       = ?,
+                        notify_service_warning        = ?,
+                        notify_service_unknown        = ?,
+                        notify_service_critical       = ?,
+                        notify_service_flapping       = ?,
+                        notify_service_downtime       = ?,
+                        notify_host_recovery          = ?,
+                        notify_host_down              = ?,
+                        notify_host_unreachable       = ?,
+                        notify_host_flapping          = ?,
+                        notify_host_downtime          = ?,
+                        minimum_importance            = ?
+                    );
+
+            while (tmp != NULL) {
+
+                ndomod_mysql_i = 0;
+
+                object_id = ndomod_get_object_id(NDO_TRUE, 
+                                                 NDO2DB_OBJECTTYPE_CONTACT,
+                                                 tmp->name,
+                                                 NULL);
+
+                i = 0;
+
+                notify_options[i++] = 
+                    flag_isset(tmp->service_notification_options, OPT_UNKNOWN);
+                notify_options[i++] = 
+                    flag_isset(tmp->service_notification_options, OPT_WARNING);
+                notify_options[i++] = 
+                    flag_isset(tmp->service_notification_options, OPT_CRITICAL);
+                notify_options[i++] = 
+                    flag_isset(tmp->service_notification_options, OPT_RECOVERY);
+                notify_options[i++] = 
+                    flag_isset(tmp->service_notification_options, OPT_FLAPPING);
+                notify_options[i++] = 
+                    flag_isset(tmp->service_notification_options, OPT_DOWNTIME);
+
+                notify_options[i++] = 
+                    flag_isset(tmp->host_notification_options, OPT_RECOVERY);
+                notify_options[i++] = 
+                    flag_isset(tmp->host_notification_options, OPT_DOWN);
+                notify_options[i++] = 
+                    flag_isset(tmp->host_notification_options, OPT_UNREACHABLE);
+                notify_options[i++] = 
+                    flag_isset(tmp->host_notification_options, OPT_FLAPPING);
+                notify_options[i++] = 
+                    flag_isset(tmp->host_notification_options, OPT_DOWNTIME);
+
+
+                SET_BIND_INT(config_type);
+                SET_BIND_INT(object_id);
+                SET_BIND_STR(tmp->alias);
+                SET_BIND_STR(tmp->email);
+                SET_BIND_STR(tmp->pager);
+                SET_BIND_STR(tmp->email);
+                SET_BIND_STR(tmp->host_notification_period);
+                SET_BIND_STR(tmp->service_notification_period);
+                SET_BIND_INT(tmp->host_notifications_enabled);
+                SET_BIND_INT(tmp->service_notifications_enabled);
+                SET_BIND_INT(tmp->can_submit_commands);
+
+                i = 0;
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+
+                SET_BIND_INT(tmp->minimum_value);
+
+
+                SET_BIND_INT(config_type);
+                SET_BIND_INT(object_id);
+                SET_BIND_STR(tmp->alias);
+                SET_BIND_STR(tmp->email);
+                SET_BIND_STR(tmp->pager);
+                SET_BIND_STR(tmp->email);
+                SET_BIND_STR(tmp->host_notification_period);
+                SET_BIND_STR(tmp->service_notification_period);
+                SET_BIND_INT(tmp->host_notifications_enabled);
+                SET_BIND_INT(tmp->service_notifications_enabled);
+                SET_BIND_INT(tmp->can_submit_commands);
+
+                i = 0;
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+                SET_BIND_INT(notify_options[i++]);
+
+                SET_BIND_INT(tmp->minimum_value);
+
+                tmp = tmp->next;
+            }
+
+            /* @todo: contact addresses, host/service notification commands,
+                      and custom variables (this should be generalized) */
     }
 }
 
