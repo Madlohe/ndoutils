@@ -96,7 +96,7 @@ void ndomod_clear_tables()
     SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_timeperiods);
     SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_timeperiodtimeranges);
     SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactgroups);
-    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactgroupmembers);
+    SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_contactgroup_members);
     SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_hostgroups);
     SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicegroups);
     SET_SQL_AND_QUERY(TRUNCATE TABLE nagios_servicegroupmembers);
@@ -384,6 +384,9 @@ do { \
 
 void ndomod_write_objects(int write_type, int config_type)
 {
+    int i = 0;
+    int object_id = 0;
+
     /* screw the optimization for now.
        i'll come back to it
 
@@ -402,503 +405,651 @@ void ndomod_write_objects(int write_type, int config_type)
         WRITE_ACTIVE_OBJECT_NAME1(servicegroup, object_type, group_name);
     }
 
-    else if (write_type == NDOMOD_OBJECT_CONFIG) {
+    else if (write_type != NDOMOD_OBJECT_CONFIG) {
+        return;
+    }
 
-        int i = 0;
+    /* everything for the rest of the function is NDOMOD_OBJECT_CONFIG */
 
-        if (!(ndomod_config_output_options & config_type)) {
-            return;
+    if (!(ndomod_config_output_options & config_type)) {
+        return;
+    }
+
+    /********************************************************************
+        commands
+    ********************************************************************/
+    {
+        command * tmp = command_list;
+        object_id = 0;
+
+        RESET_BIND();
+        SET_SQL(INSERT INTO 
+                    nagios_commands
+                SET
+                    instance_id  = 1,
+                    object_id    = ?,
+                    config_type  = ?,
+                    command_line = ?
+                ON DUPLICATE KEY UPDATE
+                    instance_id  = 1,
+                    object_id    = ?,
+                    config_type  = ?,
+                    command_line = ?
+                );
+
+        while (tmp != NULL) {
+
+            /* we don't need to memset(0) since it's the same amount
+               of arguments each time */
+            ndomod_mysql_i = 0;
+
+            /* @todo - it may be worth it to see if there is a better way
+                       to do this, it will require some benchmarking,
+                       but it might be nicer to just put a subquery in
+                       and let sql handle the processing aspect */
+            object_id = ndomod_get_object_id(NDO_TRUE, 
+                                             NDO2DB_OBJECTTYPE_COMMAND,
+                                             tmp->name,
+                                             NULL);
+
+            SET_BIND_INT(object_id);
+            SET_BIND_INT(config_type);
+            SET_BIND_STR(tmp->command_line);
+
+            SET_BIND_INT(object_id);
+            SET_BIND_INT(config_type);
+            SET_BIND_STR(tmp->command_line);
+
+            BIND();
+            QUERY();
+
+            tmp = tmp->next;
+        }
+    }
+
+    /********************************************************************
+        timeperiods and ranges
+    ********************************************************************/
+    {
+        timeperiod * tmp  = timeperiod_list;
+        timerange * range = NULL;
+
+        object_id = 0;
+        int day = 0;
+
+        /* if you have more than 2k timeperiods, you're doing it wrong.. */
+        int timeperiod_ids[2048];
+        int timeperiod_i = 0;
+
+        RESET_BIND();
+        SET_SQL(INSERT INTO 
+                    nagios_timeperiods
+                SET
+                    instance_id          = 1,
+                    timeperiod_object_id = ?,
+                    config_type          = ?,
+                    alias                = ?
+                ON DUPLICATE KEY UPDATE
+                    instance_id          = 1,
+                    timeperiod_object_id = ?,
+                    config_type          = ?,
+                    alias                = ?
+                );
+
+        while (tmp != NULL) {
+
+            ndomod_mysql_i = 0;
+
+            object_id = ndomod_get_object_id(NDO_TRUE, 
+                                             NDO2DB_OBJECTTYPE_TIMEPERIOD,
+                                             tmp->name,
+                                             NULL);
+
+            /* store this for later lookup */
+            timeperiod_ids[timeperiod_i] = object_id;
+            timeperiod_i++;
+
+            SET_BIND_INT(object_id);
+            SET_BIND_INT(config_type);
+            SET_BIND_STR(tmp->alias);
+
+            SET_BIND_INT(object_id);
+            SET_BIND_INT(config_type);
+            SET_BIND_STR(tmp->alias);
+
+            BIND();
+            QUERY();
+
+            tmp = tmp->next;
         }
 
-        /********************************************************************
-            commands
-        ********************************************************************/
-        {
-            command * tmp = command_list;
-            int object_id = 0;
+        /* loop back over for time ranges */
+        tmp = timeperiod_list;
+        timeperiod_i   = 0;
 
-            RESET_BIND();
-            SET_SQL(INSERT INTO 
-                        nagios_commands
-                    SET
-                        instance_id  = 1,
-                        object_id    = ?,
-                        config_type  = ?,
-                        command_line = ?
-                    ON DUPLICATE KEY UPDATE
-                        instance_id  = 1,
-                        object_id    = ?,
-                        config_type  = ?,
-                        command_line = ?
-                    );
+        RESET_BIND();
+        SET_SQL(INSERT INTO 
+                    nagios_timeperiod_timeranges
+                SET
+                    instance_id   = 1,
+                    timeperiod_id = ?,
+                    day           = ?,
+                    start_sec     = ?,
+                    end_sec       = ?
+                ON DUPLICATE KEY UPDATE
+                    instance_id   = 1,
+                    timeperiod_id = ?,
+                    day           = ?,
+                    start_sec     = ?,
+                    end_sec       = ?
+                );
 
-            while (tmp != NULL) {
+        while (tmp != NULL) {
 
-                /* we don't need to memset(0) since it's the same amount
-                   of arguments each time */
+            object_id = timeperiod_ids[timeperiod_i];
+
+            for (day = 0; day < 7; day++) {
+
+                range = tmp->days[day];
+            
                 ndomod_mysql_i = 0;
 
-                /* @todo - it may be worth it to see if there is a better way
-                           to do this, it will require some benchmarking,
-                           but it might be nicer to just put a subquery in
-                           and let sql handle the processing aspect */
-                object_id = ndomod_get_object_id(NDO_TRUE, 
-                                                 NDO2DB_OBJECTTYPE_COMMAND,
-                                                 tmp->name,
-                                                 NULL);
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(day);
+                SET_BIND_INT(range->range_start);
+                SET_BIND_INT(range->range_end);
 
                 SET_BIND_INT(object_id);
-                SET_BIND_INT(config_type);
-                SET_BIND_STR(tmp->command_line);
+                SET_BIND_INT(day);
+                SET_BIND_INT(range->range_start);
+                SET_BIND_INT(range->range_end);
+
+                BIND();
+                QUERY();
+            }
+
+            timeperiod_i++;
+            tmp = tmp->next;
+        }
+    }
+
+    /********************************************************************
+        contacts and contact addresses
+    ********************************************************************/
+    {
+        contact * tmp = contact_list;
+        object_id = 0;
+
+        /* @todo - i'm only putting it here because this is where i was when
+                   i thought about it
+
+                   this artifical/arbitrary limit on objects is going to
+                   byte us in the bits eventually - and the only reason i'm
+                   doing it this way is for convenience of skipping another
+                   prepared statement to look up an object id when looping
+                   over the object (contacts) again
+
+                   this could be solved a few different ways:
+
+                        1) implement a cache (like the old ndo had, but
+                           hopefully a teensy bit more efficient)
+
+                        2) use multiple prepared statements simultaneously -
+                           but i'm not sure if this is possible, so it
+                           requires some extensive testing
+                            - specifically - if it is truly using each
+                              prepared statements bind() and not "resetting"
+
+                        3) ...? profit!
+
+        */
+
+        int contact_ids[2048];
+        int contact_i = 0;
+
+        /* there are eleven of them */
+        int notify_options[11] = { 0 };
+        int notify_options_i = 0;
+
+        RESET_BIND();
+        SET_SQL(
+                INSERT INTO
+                    nagios_contacts
+                SET
+                    instance_id                   = 1,
+                    config_type                   = ?,
+                    contact_object_id             = ?,
+                    alias                         = ?,
+                    email_address                 = ?,
+                    pager_address                 = ?,
+                    host_timeperiod_object_id     = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                    service_timeperiod_object_id  = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                    host_notifications_enabled    = ?,
+                    service_notifications_enabled = ?,
+                    can_submit_commands           = ?,
+                    notify_service_recovery       = ?,
+                    notify_service_warning        = ?,
+                    notify_service_unknown        = ?,
+                    notify_service_critical       = ?,
+                    notify_service_flapping       = ?,
+                    notify_service_downtime       = ?,
+                    notify_host_recovery          = ?,
+                    notify_host_down              = ?,
+                    notify_host_unreachable       = ?,
+                    notify_host_flapping          = ?,
+                    notify_host_downtime          = ?,
+                    minimum_importance            = ?
+                ON DUPLICATE KEY UPDATE
+                    instance_id                   = 1,
+                    config_type                   = ?,
+                    contact_object_id             = ?,
+                    alias                         = ?,
+                    email_address                 = ?,
+                    pager_address                 = ?,
+                    host_timeperiod_object_id     = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                    service_timeperiod_object_id  = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
+                    host_notifications_enabled    = ?,
+                    service_notifications_enabled = ?,
+                    can_submit_commands           = ?,
+                    notify_service_recovery       = ?,
+                    notify_service_warning        = ?,
+                    notify_service_unknown        = ?,
+                    notify_service_critical       = ?,
+                    notify_service_flapping       = ?,
+                    notify_service_downtime       = ?,
+                    notify_host_recovery          = ?,
+                    notify_host_down              = ?,
+                    notify_host_unreachable       = ?,
+                    notify_host_flapping          = ?,
+                    notify_host_downtime          = ?,
+                    minimum_importance            = ?
+                );
+
+        while (tmp != NULL) {
+
+            ndomod_mysql_i = 0;
+
+            object_id = ndomod_get_object_id(NDO_TRUE, 
+                                             NDO2DB_OBJECTTYPE_CONTACT,
+                                             tmp->name,
+                                             NULL);
+
+            contact_ids[contacts_i] = object_id;
+            contacts_i++;
+
+            notify_options_i = 0;
+
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->service_notification_options, OPT_UNKNOWN);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->service_notification_options, OPT_WARNING);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->service_notification_options, OPT_CRITICAL);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->service_notification_options, OPT_RECOVERY);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->service_notification_options, OPT_FLAPPING);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->service_notification_options, OPT_DOWNTIME);
+
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->host_notification_options, OPT_RECOVERY);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->host_notification_options, OPT_DOWN);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->host_notification_options, OPT_UNREACHABLE);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->host_notification_options, OPT_FLAPPING);
+            notify_options[notify_options_i++] = 
+                flag_isset(tmp->host_notification_options, OPT_DOWNTIME);
+
+
+            SET_BIND_INT(config_type);
+            SET_BIND_INT(object_id);
+            SET_BIND_STR(tmp->alias);
+            SET_BIND_STR(tmp->email);
+            SET_BIND_STR(tmp->pager);
+            SET_BIND_STR(tmp->email);
+            SET_BIND_STR(tmp->host_notification_period);
+            SET_BIND_STR(tmp->service_notification_period);
+            SET_BIND_INT(tmp->host_notifications_enabled);
+            SET_BIND_INT(tmp->service_notifications_enabled);
+            SET_BIND_INT(tmp->can_submit_commands);
+
+            notify_options_i = 0;
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+
+            SET_BIND_INT(tmp->minimum_value);
+
+
+            SET_BIND_INT(config_type);
+            SET_BIND_INT(object_id);
+            SET_BIND_STR(tmp->alias);
+            SET_BIND_STR(tmp->email);
+            SET_BIND_STR(tmp->pager);
+            SET_BIND_STR(tmp->email);
+            SET_BIND_STR(tmp->host_notification_period);
+            SET_BIND_STR(tmp->service_notification_period);
+            SET_BIND_INT(tmp->host_notifications_enabled);
+            SET_BIND_INT(tmp->service_notifications_enabled);
+            SET_BIND_INT(tmp->can_submit_commands);
+
+            notify_options_i = 0;
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+            SET_BIND_INT(notify_options[notify_options_i++]);
+
+            SET_BIND_INT(tmp->minimum_value);
+
+            tmp = tmp->next;
+        }
+
+        /* loop back over for addresses */
+        tmp        = contact_list;
+        contacts_i = 0;
+
+        RESET_BIND();
+        SET_SQL(INSERT INTO 
+                    nagios_contact_addresses
+                SET
+                    instance_id    = 1,
+                    contact_id     = ?,
+                    address_number = ?,
+                    address        = ?
+                ON DUPLICATE KEY UPDATE
+                    instance_id    = 1,
+                    contact_id     = ?,
+                    address_number = ?,
+                    address        = ?
+                );
+
+        while (tmp != NULL) {
+
+            object_id = contact_ids[contact_i];
+
+            for (i = 1; i <= MAX_CONTACT_ADDRESSES + 1; i++) {
+
+                ndomod_mysql_i = 0;
 
                 SET_BIND_INT(object_id);
-                SET_BIND_INT(config_type);
-                SET_BIND_STR(tmp->command_line);
+                SET_BIND_INT(i);
+                SET_BIND_STR(tmp->address[i - 1]);
+
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(i);
+                SET_BIND_STR(tmp->address[i - 1]);
+
+                BIND();
+                QUERY();
+            }
+
+            contact_i++;
+            tmp = tmp->next;
+        }
+
+        /* the original handle_contactdefinition command has a strtok
+           on the main string for '!' - except that it is never sent
+           over the wire - which means it is always blank - if you are
+           reading this code, and have a version of ndoutils that matches
+
+           < 3.0.0 (and have ANYTHING other than "" or NULL in the results
+           from a query like:
+
+           SELECT command_args FROM nagios_contact_notificationcommands
+                GROUP BY command_args;
+
+           ) - please contact me and let me know. find my email with
+
+           ```
+           git blame ${this_file}.c | grep heden
+           ```
+        */
+
+        /* loop back over for addresses */
+        tmp        = contact_list;
+        contact_i = 0;
+
+        commandsmember * contact_cmd = NULL;
+        int notification_type = 0;
+
+        RESET_BIND();
+        SET_SQL(
+                INSERT INTO
+                    nagios_contact_notificationcommands
+                SET
+                    instance_id       = 1,
+                    contact_id        = ?,
+                    notification_type = ?,
+                    command_object_id = ?
+                ON DUPLICATE KEY UPDATE
+                    instance_id       = 1,
+                    contact_id        = ?,
+                    notification_type = ?,
+                    command_object_id = ?
+                );
+
+        while (tmp != NULL) {
+
+            object_id = contact_ids[contact_i];
+
+            contact_cmd       = tmp->host_notification_command;
+            notification_type = NDO_DATA_HOSTNOTIFICATIONCOMMAND;
+
+            while (contact_cmd != NULL) {
+
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(notification_type);
+                SET_BIND_STR(contact_cmd->command);
+
+
+                SET_BIND_INT(object_id);
+                SET_BIND_INT(notification_type);
+                SET_BIND_STR(contact_cmd->command);
 
                 BIND();
                 QUERY();
 
-                tmp = tmp->next;
+                contact_cmd = contact_cmd->next;
             }
-        }
 
-        /********************************************************************
-            timeperiods and ranges
-        ********************************************************************/
-        {
-            timeperiod * tmp  = timeperiod_list;
-            timerange * range = NULL;
 
-            int object_id = 0;
-            int day = 0;
+            contact_cmd       = tmp->service_notification_command;
+            notification_type = NDO_DATA_SERVICENOTIFICATIONCOMMAND;
 
-            /* if you have more than 2k timeperiods, you're doing it wrong.. */
-            int timeperiod_ids[2048];
-            int timeperiod_i = 0;
-
-            RESET_BIND();
-            SET_SQL(INSERT INTO 
-                        nagios_timeperiods
-                    SET
-                        instance_id          = 1,
-                        timeperiod_object_id = ?,
-                        config_type          = ?,
-                        alias                = ?
-                    ON DUPLICATE KEY UPDATE
-                        instance_id          = 1,
-                        timeperiod_object_id = ?,
-                        config_type          = ?,
-                        alias                = ?
-                    );
-
-            while (tmp != NULL) {
-
-                ndomod_mysql_i = 0;
-
-                object_id = ndomod_get_object_id(NDO_TRUE, 
-                                                 NDO2DB_OBJECTTYPE_TIMEPERIOD,
-                                                 tmp->name,
-                                                 NULL);
-
-                /* store this for later lookup */
-                timeperiod_ids[timeperiod_i] = object_id;
-                timeperiod_i++;
+            while (contact_cmd != NULL) {
 
                 SET_BIND_INT(object_id);
-                SET_BIND_INT(config_type);
-                SET_BIND_STR(tmp->alias);
+                SET_BIND_INT(notification_type);
+                SET_BIND_STR(contact_cmd->command);
+
 
                 SET_BIND_INT(object_id);
-                SET_BIND_INT(config_type);
-                SET_BIND_STR(tmp->alias);
+                SET_BIND_INT(notification_type);
+                SET_BIND_STR(contact_cmd->command);
 
                 BIND();
                 QUERY();
 
-                tmp = tmp->next;
+                contact_cmd = contact_cmd->next;
             }
 
-            /* loop back over for time ranges */
-            tmp = timeperiod_list;
-            timeperiod_i   = 0;
-
-            RESET_BIND();
-            SET_SQL(INSERT INTO 
-                        nagios_timeperiod_timeranges
-                    SET
-                        instance_id   = 1,
-                        timeperiod_id = ?,
-                        day           = ?,
-                        start_sec     = ?,
-                        end_sec       = ?
-                    ON DUPLICATE KEY UPDATE
-                        instance_id   = 1,
-                        timeperiod_id = ?,
-                        day           = ?,
-                        start_sec     = ?,
-                        end_sec       = ?
-                    );
-
-            while (tmp != NULL) {
-
-                object_id = timeperiod_ids[timeperiod_i];
-
-                for (day = 0; day < 7; day++) {
-
-                    range = tmp->days[day];
-                
-                    ndomod_mysql_i = 0;
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(day);
-                    SET_BIND_INT(range->range_start);
-                    SET_BIND_INT(range->range_end);
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(day);
-                    SET_BIND_INT(range->range_start);
-                    SET_BIND_INT(range->range_end);
-
-                    BIND();
-                    QUERY();
-                }
-
-                timeperiod_i++;
-                tmp = tmp->next;
-            }
+            object_id++;
+            tmp = tmp->next;
         }
 
-        /********************************************************************
-            contacts and contact addresses
-        ********************************************************************/
-        {
-            contact * tmp = contact_list;
-            int object_id = 0;
+        /* loop back over for addresses */
+        tmp        = contact_list;
+        contact_i = 0;
 
+        while (tmp != NULL) {
 
-            /* @todo - i'm only putting it here because this is where i was when
-                       i thought about it
+            object_id = contact_ids[contact_i];
 
-                       this artifical/arbitrary limit on objects is going to
-                       byte us in the bits eventually - and the only reason i'm
-                       doing it this way is for convenience of skipping another
-                       prepared statement to look up an object id when looping
-                       over the object (contacts) again
+            ndomod_save_customvars(object_id, NDO2DB_OBJECTTYPE_CONTACT,
+                                   tmp->custom_variables);
 
-                       this could be solved a few different ways:
-
-                            1) implement a cache (like the old ndo had, but
-                               hopefully a teensy bit more efficient)
-
-                            2) use multiple prepared statements simultaneously -
-                               but i'm not sure if this is possible, so it
-                               requires some extensive testing
-                                - specifically - if it is truly using each
-                                  prepared statements bind() and not "resetting"
-
-                            3) ...? profit!
-
-            */
-
-            int contact_ids[2048];
-            int contact_i = 0;
-
-            /* there are eleven of them */
-            int notify_options[11] = { 0 };
-            int notify_options_i = 0;
-
-            int address = 0;
-
-            RESET_BIND();
-            SET_SQL(
-                    INSERT INTO
-                        nagios_contacts
-                    SET
-                        instance_id                   = 1,
-                        config_type                   = ?,
-                        contact_object_id             = ?,
-                        alias                         = ?,
-                        email_address                 = ?,
-                        pager_address                 = ?,
-                        host_timeperiod_object_id     = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
-                        service_timeperiod_object_id  = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
-                        host_notifications_enabled    = ?,
-                        service_notifications_enabled = ?,
-                        can_submit_commands           = ?,
-                        notify_service_recovery       = ?,
-                        notify_service_warning        = ?,
-                        notify_service_unknown        = ?,
-                        notify_service_critical       = ?,
-                        notify_service_flapping       = ?,
-                        notify_service_downtime       = ?,
-                        notify_host_recovery          = ?,
-                        notify_host_down              = ?,
-                        notify_host_unreachable       = ?,
-                        notify_host_flapping          = ?,
-                        notify_host_downtime          = ?,
-                        minimum_importance            = ?
-                    ON DUPLICATE KEY UPDATE
-                        instance_id                   = 1,
-                        config_type                   = ?,
-                        contact_object_id             = ?,
-                        alias                         = ?,
-                        email_address                 = ?,
-                        pager_address                 = ?,
-                        host_timeperiod_object_id     = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
-                        service_timeperiod_object_id  = (SELECT object_id FROM nagios_objects WHERE name1 = ? and objecttype_id = 9 LIMIT 1),
-                        host_notifications_enabled    = ?,
-                        service_notifications_enabled = ?,
-                        can_submit_commands           = ?,
-                        notify_service_recovery       = ?,
-                        notify_service_warning        = ?,
-                        notify_service_unknown        = ?,
-                        notify_service_critical       = ?,
-                        notify_service_flapping       = ?,
-                        notify_service_downtime       = ?,
-                        notify_host_recovery          = ?,
-                        notify_host_down              = ?,
-                        notify_host_unreachable       = ?,
-                        notify_host_flapping          = ?,
-                        notify_host_downtime          = ?,
-                        minimum_importance            = ?
-                    );
-
-            while (tmp != NULL) {
-
-                ndomod_mysql_i = 0;
-
-                object_id = ndomod_get_object_id(NDO_TRUE, 
-                                                 NDO2DB_OBJECTTYPE_CONTACT,
-                                                 tmp->name,
-                                                 NULL);
-
-                /* store this for later lookup */
-                contact_ids[contacts_i] = object_id;
-                contacts_i++;
-
-                notify_options_i = 0;
-
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->service_notification_options, OPT_UNKNOWN);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->service_notification_options, OPT_WARNING);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->service_notification_options, OPT_CRITICAL);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->service_notification_options, OPT_RECOVERY);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->service_notification_options, OPT_FLAPPING);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->service_notification_options, OPT_DOWNTIME);
-
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->host_notification_options, OPT_RECOVERY);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->host_notification_options, OPT_DOWN);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->host_notification_options, OPT_UNREACHABLE);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->host_notification_options, OPT_FLAPPING);
-                notify_options[notify_options_i++] = 
-                    flag_isset(tmp->host_notification_options, OPT_DOWNTIME);
-
-
-                SET_BIND_INT(config_type);
-                SET_BIND_INT(object_id);
-                SET_BIND_STR(tmp->alias);
-                SET_BIND_STR(tmp->email);
-                SET_BIND_STR(tmp->pager);
-                SET_BIND_STR(tmp->email);
-                SET_BIND_STR(tmp->host_notification_period);
-                SET_BIND_STR(tmp->service_notification_period);
-                SET_BIND_INT(tmp->host_notifications_enabled);
-                SET_BIND_INT(tmp->service_notifications_enabled);
-                SET_BIND_INT(tmp->can_submit_commands);
-
-                notify_options_i = 0;
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-
-                SET_BIND_INT(tmp->minimum_value);
-
-
-                SET_BIND_INT(config_type);
-                SET_BIND_INT(object_id);
-                SET_BIND_STR(tmp->alias);
-                SET_BIND_STR(tmp->email);
-                SET_BIND_STR(tmp->pager);
-                SET_BIND_STR(tmp->email);
-                SET_BIND_STR(tmp->host_notification_period);
-                SET_BIND_STR(tmp->service_notification_period);
-                SET_BIND_INT(tmp->host_notifications_enabled);
-                SET_BIND_INT(tmp->service_notifications_enabled);
-                SET_BIND_INT(tmp->can_submit_commands);
-
-                notify_options_i = 0;
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-                SET_BIND_INT(notify_options[notify_options_i++]);
-
-                SET_BIND_INT(tmp->minimum_value);
-
-                tmp = tmp->next;
-            }
-
-            /* loop back over for addresses */
-            tmp        = contact_list;
-            contacts_i = 0;
-
-            RESET_BIND();
-            SET_SQL(INSERT INTO 
-                        nagios_contact_addresses
-                    SET
-                        instance_id    = 1,
-                        contact_id     = ?,
-                        address_number = ?,
-                        address        = ?
-                    ON DUPLICATE KEY UPDATE
-                        instance_id    = 1,
-                        contact_id     = ?,
-                        address_number = ?,
-                        address        = ?
-                    );
-
-            while (tmp != NULL) {
-
-                object_id = contact_ids[contact_i];
-
-                for (i = 1; i <= MAX_CONTACT_ADDRESSES + 1; i++) {
-
-                    ndomod_mysql_i = 0;
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(i);
-                    SET_BIND_STR(tmp->address[i - 1]);
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(i);
-                    SET_BIND_STR(tmp->address[i - 1]);
-
-                    BIND();
-                    QUERY();
-                }
-
-                contact_i++;
-                tmp = tmp->next;
-            }
-
-            /* @todo: host/service notification commands,
-                      and custom variables (this should be generalized) */
-
-
-
-            /* the original handle_contactdefinition command has a strtok
-               on the main string for '!' - except that it is never sent
-               over the wire - which means it is always blank - if you are
-               reading this code, and have a version of ndoutils that matches
-
-               < 3.0.0 (and have ANYTHING other than "" or NULL in the results
-               from a query like:
-
-               SELECT command_args FROM nagios_contact_notificationcommands
-                    GROUP BY command_args;
-
-               ) - please contact me and let me know. find my email with
-
-               ```
-               git blame ${this_file}.c | grep heden
-               ```
-            */
-
-            /* loop back over for addresses */
-            tmp        = contact_list;
-            contacts_i = 0;
-
-            commandsmember * contact_cmd = NULL;
-            int notification_type = 0;
-
-            RESET_BIND();
-            SET_SQL(
-                    INSERT INTO
-                        nagios_contact_notificationcommands
-                    SET
-                        instance_id = 1,
-                        contact_id = ?,
-                        notification_type = ?,
-                        command_object_id = ?
-                    ON DUPLICATE KEY UPDATE
-                        instance_id = 1,
-                        contact_id = ?,
-                        notification_type = ?,
-                        command_object_id = ?
-                    );
-
-            while (tmp != NULL) {
-
-                object_id = contact_ids[contact_i];
-
-                contact_cmd       = tmp->host_notification_command;
-                notification_type = NDO_DATA_HOSTNOTIFICATIONCOMMAND;
-
-                while (contact_cmd != NULL) {
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(notification_type);
-                    SET_BIND_STR(contact_cmd->command);
-
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(notification_type);
-                    SET_BIND_STR(contact_cmd->command);
-
-                    BIND();
-                    QUERY();
-
-                    contact_cmd = contact_cmd->next;
-                }
-
-
-                contact_cmd       = tmp->service_notification_command;
-                notification_type = NDO_DATA_SERVICENOTIFICATIONCOMMAND;
-
-                while (contact_cmd != NULL) {
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(notification_type);
-                    SET_BIND_STR(contact_cmd->command);
-
-
-                    SET_BIND_INT(object_id);
-                    SET_BIND_INT(notification_type);
-                    SET_BIND_STR(contact_cmd->command);
-
-                    BIND();
-                    QUERY();
-
-                    contact_cmd = contact_cmd->next;
-                }
-
-                object_id++;
-                tmp = tmp->next;
-            }
+            object_id++;
+            tmp = tmp->next;
         }
+    }
+
+    /********************************************************************
+        contact groups
+    ********************************************************************/
+    {
+        contactgroup * tmp = contactgroups_list;
+        object_id = 0;
+
+        int contactgroup_ids[2048] = { 0 };
+        int contactgroup_i = 0;
+
+        RESET_BIND();
+        SET_SQL(INSERT INTO 
+                    nagios_contactgroups
+                SET
+                    instance_id            = 1,
+                    contactgroup_object_id = ?,
+                    config_type            = ?,
+                    alias                  = ?
+                ON DUPLICATE KEY UPDATE
+                    instance_id            = 1,
+                    contactgroup_object_id = ?,
+                    config_type            = ?,
+                    alias                  = ?
+                );
+
+        while (tmp != NULL) {
+
+            ndomod_mysql_i = 0;
+
+            object_id = ndomod_get_object_id(NDO_TRUE, 
+                                             NDO2DB_OBJECTTYPE_CONTACTGROUP,
+                                             tmp->name,
+                                             NULL);
+
+            /* store this for later lookup */
+            contactgroup_ids[contactgroup_i] = object_id;
+            contactgroup_i++;
+
+            SET_BIND_INT(object_id);
+            SET_BIND_INT(config_type);
+            SET_BIND_STR(tmp->alias);
+
+            SET_BIND_INT(object_id);
+            SET_BIND_INT(config_type);
+            SET_BIND_STR(tmp->alias);
+
+            BIND();
+            QUERY();
+
+            tmp = tmp->next;
+        }
+
+
+        /* loop back over for members */
+        tmp = contactgroups_list;
+        contactgroup_i = 0;
+
+        contactgroupmember * member = NULL;
+
+        RESET_BIND();
+        SET_SQL(
+                INSERT INTO
+                    nagios_contactgroup_members
+                SET
+                    instance_id       = 1,
+                    contactgroup_id   = ?,
+                    contact_object_id = (SELECT object_id FROM nagios_objects WHERE objecttype_id = 10 AND name1 = ? LIMIT 1)
+                ON DUPLICATE KEY UPDATE
+                    instance_id       = 1,
+                    contactgroup_id   = ?,
+                    contact_object_id = (SELECT object_id FROM nagios_objects WHERE objecttype_id = 10 AND name1 = ? LIMIT 1)
+                );
+
+        while (tmp != NULL) {
+
+            object_id = contactgroup_ids[contactgroup_i];
+
+            member = tmp->members;
+
+            while (member != NULL) {
+
+                SET_BIND_INT(object_id);
+                SET_BIND_STR(member->contact_name);
+
+                SET_BIND_INT(object_id);
+                SET_BIND_STR(member->contact_name);
+
+                BIND();
+                QUERY();
+            }
+
+            contactgroup_i++;
+            tmp = tmp->next;
+        }
+    }
+}
+
+void ndomod_save_customvars(int object_id, int config_type, customvariablesmember * custom_vars)
+{
+    customvariablesmember * tmp = custom_vars;
+
+    RESET_BIND();
+    SET_SQL(
+            INSERT INTO
+                nagios_customvariables
+            SET
+                instance_id       = 1,
+                object_id         = ?,
+                config_type       = ?,
+                has_been_modified = ?,
+                varname           = ?,
+                varvalue          = ?
+            ON DUPLICATE KEY UPDATE
+                instance_id       = 1,
+                object_id         = ?,
+                config_type       = ?,
+                has_been_modified = ?,
+                varname           = ?,
+                varvalue          = ?
+            );
+
+    while (tmp != NULL) {
+
+        SET_BIND_INT(object_id);
+        SET_BIND_INT(config_type);
+        SET_BIND_INT(tmp->has_been_modified);
+        SET_BIND_STR(tmp->variable_name);
+        SET_BIND_STR(tmp->variable_value);
+
+        SET_BIND_INT(object_id);
+        SET_BIND_INT(config_type);
+        SET_BIND_INT(tmp->has_been_modified);
+        SET_BIND_STR(tmp->variable_name);
+        SET_BIND_STR(tmp->variable_value);
+
+        BIND();
+        QUERY();
+
+        tmp = tmp->next;
     }
 }
 
