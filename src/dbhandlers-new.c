@@ -404,6 +404,8 @@ void ndomod_write_objects(int write_type, int config_type)
 
     else if (write_type == NDOMOD_OBJECT_CONFIG) {
 
+        int i = 0;
+
         if (!(ndomod_config_output_options & config_type)) {
             return;
         }
@@ -472,7 +474,7 @@ void ndomod_write_objects(int write_type, int config_type)
 
             /* if you have more than 2k timeperiods, you're doing it wrong.. */
             int timeperiod_ids[2048];
-            int i = 0;
+            int timeperiod_i = 0;
 
             RESET_BIND();
             SET_SQL(INSERT INTO 
@@ -499,8 +501,8 @@ void ndomod_write_objects(int write_type, int config_type)
                                                  NULL);
 
                 /* store this for later lookup */
-                timeperiod_ids[i] = object_id;
-                i++;
+                timeperiod_ids[timeperiod_i] = object_id;
+                timeperiod_i++;
 
                 SET_BIND_INT(object_id);
                 SET_BIND_INT(config_type);
@@ -518,7 +520,7 @@ void ndomod_write_objects(int write_type, int config_type)
 
             /* loop back over for time ranges */
             tmp = timeperiod_list;
-            i   = 0;
+            timeperiod_i   = 0;
 
             RESET_BIND();
             SET_SQL(INSERT INTO 
@@ -539,7 +541,7 @@ void ndomod_write_objects(int write_type, int config_type)
 
             while (tmp != NULL) {
 
-                object_id = timeperiod_ids[i];
+                object_id = timeperiod_ids[timeperiod_i];
 
                 for (day = 0; day < 7; day++) {
 
@@ -561,7 +563,7 @@ void ndomod_write_objects(int write_type, int config_type)
                     QUERY();
                 }
 
-                i++;
+                timeperiod_i++;
                 tmp = tmp->next;
             }
         }
@@ -570,13 +572,42 @@ void ndomod_write_objects(int write_type, int config_type)
             contacts and contact addresses
         ********************************************************************/
         {
-            contact * tmp  = contact_list;
+            contact * tmp = contact_list;
             int object_id = 0;
 
-            int i = 0;
+
+            /* @todo - i'm only putting it here because this is where i was when
+                       i thought about it
+
+                       this artifical/arbitrary limit on objects is going to
+                       byte us in the bits eventually - and the only reason i'm
+                       doing it this way is for convenience of skipping another
+                       prepared statement to look up an object id when looping
+                       over the object (contacts) again
+
+                       this could be solved a few different ways:
+
+                            1) implement a cache (like the old ndo had, but
+                               hopefully a teensy bit more efficient)
+
+                            2) use multiple prepared statements simultaneously -
+                               but i'm not sure if this is possible, so it
+                               requires some extensive testing
+                                - specifically - if it is truly using each
+                                  prepared statements bind() and not "resetting"
+
+                            3) ...? profit!
+
+            */
+
+            int contact_ids[2048];
+            int contact_i = 0;
 
             /* there are eleven of them */
             int notify_options[11] = { 0 };
+            int notify_options_i = 0;
+
+            int address = 0;
 
             RESET_BIND();
             SET_SQL(
@@ -641,30 +672,34 @@ void ndomod_write_objects(int write_type, int config_type)
                                                  tmp->name,
                                                  NULL);
 
-                i = 0;
+                /* store this for later lookup */
+                contact_ids[contacts_i] = object_id;
+                contacts_i++;
 
-                notify_options[i++] = 
+                notify_options_i = 0;
+
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->service_notification_options, OPT_UNKNOWN);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->service_notification_options, OPT_WARNING);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->service_notification_options, OPT_CRITICAL);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->service_notification_options, OPT_RECOVERY);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->service_notification_options, OPT_FLAPPING);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->service_notification_options, OPT_DOWNTIME);
 
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->host_notification_options, OPT_RECOVERY);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->host_notification_options, OPT_DOWN);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->host_notification_options, OPT_UNREACHABLE);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->host_notification_options, OPT_FLAPPING);
-                notify_options[i++] = 
+                notify_options[notify_options_i++] = 
                     flag_isset(tmp->host_notification_options, OPT_DOWNTIME);
 
 
@@ -680,18 +715,18 @@ void ndomod_write_objects(int write_type, int config_type)
                 SET_BIND_INT(tmp->service_notifications_enabled);
                 SET_BIND_INT(tmp->can_submit_commands);
 
-                i = 0;
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
+                notify_options_i = 0;
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
 
                 SET_BIND_INT(tmp->minimum_value);
 
@@ -708,26 +743,162 @@ void ndomod_write_objects(int write_type, int config_type)
                 SET_BIND_INT(tmp->service_notifications_enabled);
                 SET_BIND_INT(tmp->can_submit_commands);
 
-                i = 0;
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
-                SET_BIND_INT(notify_options[i++]);
+                notify_options_i = 0;
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
+                SET_BIND_INT(notify_options[notify_options_i++]);
 
                 SET_BIND_INT(tmp->minimum_value);
 
                 tmp = tmp->next;
             }
 
-            /* @todo: contact addresses, host/service notification commands,
+            /* loop back over for addresses */
+            tmp        = contact_list;
+            contacts_i = 0;
+
+            RESET_BIND();
+            SET_SQL(INSERT INTO 
+                        nagios_contact_addresses
+                    SET
+                        instance_id    = 1,
+                        contact_id     = ?,
+                        address_number = ?,
+                        address        = ?
+                    ON DUPLICATE KEY UPDATE
+                        instance_id    = 1,
+                        contact_id     = ?,
+                        address_number = ?,
+                        address        = ?
+                    );
+
+            while (tmp != NULL) {
+
+                object_id = contact_ids[contact_i];
+
+                for (i = 1; i <= MAX_CONTACT_ADDRESSES + 1; i++) {
+
+                    ndomod_mysql_i = 0;
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(i);
+                    SET_BIND_STR(tmp->address[i - 1]);
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(i);
+                    SET_BIND_STR(tmp->address[i - 1]);
+
+                    BIND();
+                    QUERY();
+                }
+
+                contact_i++;
+                tmp = tmp->next;
+            }
+
+            /* @todo: host/service notification commands,
                       and custom variables (this should be generalized) */
+
+
+
+            /* the original handle_contactdefinition command has a strtok
+               on the main string for '!' - except that it is never sent
+               over the wire - which means it is always blank - if you are
+               reading this code, and have a version of ndoutils that matches
+
+               < 3.0.0 (and have ANYTHING other than "" or NULL in the results
+               from a query like:
+
+               SELECT command_args FROM nagios_contact_notificationcommands
+                    GROUP BY command_args;
+
+               ) - please contact me and let me know. find my email with
+
+               ```
+               git blame ${this_file}.c | grep heden
+               ```
+            */
+
+            /* loop back over for addresses */
+            tmp        = contact_list;
+            contacts_i = 0;
+
+            commandsmember * contact_cmd = NULL;
+            int notification_type = 0;
+
+            RESET_BIND();
+            SET_SQL(
+                    INSERT INTO
+                        nagios_contact_notificationcommands
+                    SET
+                        instance_id = 1,
+                        contact_id = ?,
+                        notification_type = ?,
+                        command_object_id = ?
+                    ON DUPLICATE KEY UPDATE
+                        instance_id = 1,
+                        contact_id = ?,
+                        notification_type = ?,
+                        command_object_id = ?
+                    );
+
+            while (tmp != NULL) {
+
+                object_id = contact_ids[contact_i];
+
+                contact_cmd       = tmp->host_notification_command;
+                notification_type = NDO_DATA_HOSTNOTIFICATIONCOMMAND;
+
+                while (contact_cmd != NULL) {
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(notification_type);
+                    SET_BIND_STR(contact_cmd->command);
+
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(notification_type);
+                    SET_BIND_STR(contact_cmd->command);
+
+                    BIND();
+                    QUERY();
+
+                    contact_cmd = contact_cmd->next;
+                }
+
+
+                contact_cmd       = tmp->service_notification_command;
+                notification_type = NDO_DATA_SERVICENOTIFICATIONCOMMAND;
+
+                while (contact_cmd != NULL) {
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(notification_type);
+                    SET_BIND_STR(contact_cmd->command);
+
+
+                    SET_BIND_INT(object_id);
+                    SET_BIND_INT(notification_type);
+                    SET_BIND_STR(contact_cmd->command);
+
+                    BIND();
+                    QUERY();
+
+                    contact_cmd = contact_cmd->next;
+                }
+
+                object_id++;
+                tmp = tmp->next;
+            }
+        }
     }
 }
 
