@@ -1932,10 +1932,106 @@ NDOMOD_HANDLER_FUNCTION(flapping_data)
     
 }
 
-
 NDOMOD_HANDLER_FUNCTION(program_status_data)
 {
-    
+    RESET_BIND();
+
+    SET_SQL(
+        INSERT INTO
+            nagios_programstatus
+        SET
+            instance_id                    = 1,
+            status_update_time             = ?,
+            program_start_time             = FROM_UNIXTIME(?),
+            is_currently_running           = 1,
+            process_id                     = ?,
+            daemon_mode                    = ?,
+            last_command_check             = FROM_UNIXTIME(0),
+            last_log_rotation              = FROM_UNIXTIME(?),
+            notifications_enabled          = ?,
+            active_service_checks_enabled  = ?,
+            passive_service_checks_enabled = ?,
+            active_host_checks_enabled     = ?,
+            passive_host_checks_enabled    = ?,
+            event_handlers_enabled         = ?,
+            flap_detection_enabled         = ?,
+            failure_prediction_enabled     = ?,
+            process_performance_data       = ?,
+            obsess_over_hosts              = ?,
+            obsess_over_services           = ?,
+            modified_host_attributes       = ?,
+            modified_service_attributes    = ?,
+            global_host_event_handler      = ?,
+            global_service_event_handler   = ?
+        ON DUPLICATE KEY UPDATE
+            instance_id                    = 1,
+            status_update_time             = ?,
+            program_start_time             = FROM_UNIXTIME(?),
+            is_currently_running           = 1,
+            process_id                     = ?,
+            daemon_mode                    = ?,
+            last_command_check             = FROM_UNIXTIME(0),
+            last_log_rotation              = FROM_UNIXTIME(?),
+            notifications_enabled          = ?,
+            active_service_checks_enabled  = ?,
+            passive_service_checks_enabled = ?,
+            active_host_checks_enabled     = ?,
+            passive_host_checks_enabled    = ?,
+            event_handlers_enabled         = ?,
+            flap_detection_enabled         = ?,
+            failure_prediction_enabled     = ?,
+            process_performance_data       = ?,
+            obsess_over_hosts              = ?,
+            obsess_over_services           = ?,
+            modified_host_attributes       = ?,
+            modified_service_attributes    = ?,
+            global_host_event_handler      = ?,
+            global_service_event_handler   = ?
+
+        );
+
+    SET_BIND_STR(data->timestamp.tv_sec);               // status_update_time
+    SET_BIND_STR(data->program_start);                  // program_start_time
+    SET_BIND_INT(data->pid);                            // process_id
+    SET_BIND_INT(data->daemon_mode);                    // daemon_mode
+    SET_BIND_STR(data->last_log_rotation);              // last_log_rotation
+    SET_BIND_INT(data->notifications_enabled);          // notifications_enabled
+    SET_BIND_INT(data->active_service_checks_enabled);  // active_service_checks_enabled 
+    SET_BIND_INT(data->passive_service_checks_enabled); // passive_service_checks_enabled 
+    SET_BIND_INT(data->active_host_checks_enabled);     // active_host_checks_enabled 
+    SET_BIND_INT(data->passive_host_checks_enabled);    // passive_host_checks_enabled 
+    SET_BIND_INT(data->event_handlers_enabled);         // event_handlers_enabled
+    SET_BIND_INT(data->flap_detection_enabled);         // failure_prediction_enabled 
+    SET_BIND_INT(data->process_performance_data);       // process_performance_data 
+    SET_BIND_INT(data->obsess_over_hosts);              // obsess_over_hosts 
+    SET_BIND_INT(data->obsess_over_services);           // obsess_over_services
+    SET_BIND_INT(data->modified_host_attributes);       // modified_host_attributes 
+    SET_BIND_INT(data->modified_service_attributes);    // modified_service_attributes 
+    SET_BIND_STR(data->global_host_event_handler);      // global_host_event_handler
+    SET_BIND_STR(data->global_service_event_handler);   // global_service_event_handler
+
+    SET_BIND_STR(data->timestamp.tv_sec);               // status_update_time
+    SET_BIND_STR(data->program_start);                  // program_start_time
+    SET_BIND_INT(data->pid);                            // process_id
+    SET_BIND_INT(data->daemon_mode);                    // daemon_mode
+    SET_BIND_STR(data->last_log_rotation);              // last_log_rotation
+    SET_BIND_INT(data->notifications_enabled);          // notifications_enabled
+    SET_BIND_INT(data->active_service_checks_enabled);  // active_service_checks_enabled 
+    SET_BIND_INT(data->passive_service_checks_enabled); // passive_service_checks_enabled 
+    SET_BIND_INT(data->active_host_checks_enabled);     // active_host_checks_enabled 
+    SET_BIND_INT(data->passive_host_checks_enabled);    // passive_host_checks_enabled 
+    SET_BIND_INT(data->event_handlers_enabled);         // event_handlers_enabled
+    SET_BIND_INT(data->flap_detection_enabled);         // failure_prediction_enabled 
+    SET_BIND_INT(data->process_performance_data);       // process_performance_data 
+    SET_BIND_INT(data->obsess_over_hosts);              // obsess_over_hosts 
+    SET_BIND_INT(data->obsess_over_services);           // obsess_over_services
+    SET_BIND_INT(data->modified_host_attributes);       // modified_host_attributes 
+    SET_BIND_INT(data->modified_service_attributes);    // modified_service_attributes 
+    SET_BIND_STR(data->global_host_event_handler);      // global_host_event_handler
+    SET_BIND_STR(data->global_service_event_handler);   // global_service_event_handler
+
+    BIND();
+    QUERY();
 }
 
 
