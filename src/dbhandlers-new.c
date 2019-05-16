@@ -2413,7 +2413,6 @@ NDOMOD_HANDLER_FUNCTION(service_status_data)
     SET_BIND_DOUBLE(service->retry_interval);             // retry_check_interval
     SET_BIND_INT(timeperiod_object_id);                   // check_timeperiod_object_id
 
-
     SET_BIND_INT(service_object_id);                      // service_object_id
     SET_BIND_INT(data->timestamp.tv_sec);                 // status_update_time
     SET_BIND_STR(service->plugin_output);                 // output
@@ -2468,6 +2467,67 @@ NDOMOD_HANDLER_FUNCTION(service_status_data)
 NDOMOD_HANDLER_FUNCTION(contact_status_data)
 {
     
+    int contact_object_id = 0;
+    contact *contact = (contact *)data->object_ptr;
+    timeperiod *timeperiod = contact->check_period_ptr;
+    char *event_handler_name = contact->event_handler_ptr == NULL ? "" : contact->event_handler_ptr->name;
+    char *check_command_name = contact->check_command_ptr == NULL ? "" : contact->check_command_ptr->name;
+
+    // If data->timestamp.tv_sec < dbinfo.latest_realtime_data_time, return;
+    // idk if this goes before or after the bind.
+
+    contact_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_CONTACT, contact->name, NULL);
+
+    RESET_BIND();
+
+    SET_SQL(
+        INSERT INTO nagios_contactstatus
+        SET
+            instance_id                   = 1,
+            contact_object_id             = ?,
+            status_update_time            = FROM_UNIXTIME(?),
+            host_notifications_enabled    = ?,
+            service_notifications_enabled = ?,
+            last_host_notification        = FROM_UNIXTIME(?),
+            last_service_notification     = FROM_UNIXTIME(?),
+            modified_attributes           = ?,
+            modified_host_attributes      = ?,
+            modified_service_attributes   = ?
+        ON DUPLICATE KEY UPDATE
+            instance_id                   = 1,
+            contact_object_id             = ?,
+            status_update_time            = FROM_UNIXTIME(?),
+            host_notifications_enabled    = ?,
+            service_notifications_enabled = ?,
+            last_host_notification        = FROM_UNIXTIME(?),
+            last_service_notification     = FROM_UNIXTIME(?),
+            modified_attributes           = ?,
+            modified_host_attributes      = ?,
+            modified_service_attributes   = ?
+        );
+    
+    SET_BIND_INT(contact_object_id);                      // contact_object_id
+    SET_BIND_INT(data->timestamp.tv_sec);                 // status_update_time
+    SET_BIND_INT(contact->host_notifications_enabled);    // host_notifications_enabled
+    SET_BIND_INT(contact->service_notifications_enabled); // service_notifications_enabled
+    SET_BIND_INT(contact->last_host_notification);        // last_host_notification
+    SET_BIND_INT(contact->last_service_notification);     // last_service_notification
+    SET_BIND_INT(contact->modified_attributes);           // modified_attributes
+    SET_BIND_INT(contact->modified_host_attributes);      // modified_host_attributes
+    SET_BIND_INT(contact->modified_service_attributes);   // modified_service_attributes
+
+    SET_BIND_INT(contact_object_id);                      // contact_object_id
+    SET_BIND_INT(data->timestamp.tv_sec);                 // status_update_time
+    SET_BIND_INT(contact->host_notifications_enabled);    // host_notifications_enabled
+    SET_BIND_INT(contact->service_notifications_enabled); // service_notifications_enabled
+    SET_BIND_INT(contact->last_host_notification);        // last_host_notification
+    SET_BIND_INT(contact->last_service_notification);     // last_service_notification
+    SET_BIND_INT(contact->modified_attributes);           // modified_attributes
+    SET_BIND_INT(contact->modified_host_attributes);      // modified_host_attributes
+    SET_BIND_INT(contact->modified_service_attributes);   // modified_service_attributes
+
+    BIND();
+    QUERY();
 }
 
 
