@@ -2533,7 +2533,41 @@ NDOMOD_HANDLER_FUNCTION(contact_status_data)
 
 NDOMOD_HANDLER_FUNCTION(external_command_data)
 {
-    
+    if (data->type != NEBTYPE_EXTERNALCOMMAND_START) {
+        return NDO_ERROR;
+    }
+
+    RESET_BIND();
+    SET_SQL(
+        INSERT INTO 
+            nagios_externalcommands
+        SET 
+            instance_id  = 1,
+            command_type = ?,
+            entry_time   = FROM_UNIXTIME(?),
+            command_name = ?,
+            command_args = ?
+        ON DUPLICATE KEY UPDATE
+            instance_id  = 1,
+            command_type = ?,
+            entry_time   = FROM_UNIXTIME(?),
+            command_name = ?,
+            command_args = ?
+        );
+
+    SET_BIND_INT(data->command_type);
+    SET_BIND_INT(data->entry_time);
+    SET_BIND_STR(data->command_string);
+    SET_BIND_STR(data->command_args);
+
+    SET_BIND_INT(data->command_type);
+    SET_BIND_INT(data->entry_time);
+    SET_BIND_STR(data->command_string);
+    SET_BIND_STR(data->command_args);
+
+    BIND();
+    QUERY();
+
 }
 
 
