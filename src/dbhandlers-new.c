@@ -1991,10 +1991,10 @@ NDOMOD_HANDLER_FUNCTION(program_status_data)
         );
 
     SET_BIND_STR(data->timestamp.tv_sec);               // status_update_time
-    SET_BIND_STR(data->program_start);                  // program_start_time
+    SET_BIND_INT(data->program_start);                  // program_start_time
     SET_BIND_INT(data->pid);                            // process_id
     SET_BIND_INT(data->daemon_mode);                    // daemon_mode
-    SET_BIND_STR(data->last_log_rotation);              // last_log_rotation
+    SET_BIND_INT(data->last_log_rotation);              // last_log_rotation
     SET_BIND_INT(data->notifications_enabled);          // notifications_enabled
     SET_BIND_INT(data->active_service_checks_enabled);  // active_service_checks_enabled 
     SET_BIND_INT(data->passive_service_checks_enabled); // passive_service_checks_enabled 
@@ -2011,10 +2011,10 @@ NDOMOD_HANDLER_FUNCTION(program_status_data)
     SET_BIND_STR(data->global_service_event_handler);   // global_service_event_handler
 
     SET_BIND_STR(data->timestamp.tv_sec);               // status_update_time
-    SET_BIND_STR(data->program_start);                  // program_start_time
+    SET_BIND_INT(data->program_start);                  // program_start_time
     SET_BIND_INT(data->pid);                            // process_id
     SET_BIND_INT(data->daemon_mode);                    // daemon_mode
-    SET_BIND_STR(data->last_log_rotation);              // last_log_rotation
+    SET_BIND_INT(data->last_log_rotation);              // last_log_rotation
     SET_BIND_INT(data->notifications_enabled);          // notifications_enabled
     SET_BIND_INT(data->active_service_checks_enabled);  // active_service_checks_enabled 
     SET_BIND_INT(data->passive_service_checks_enabled); // passive_service_checks_enabled 
