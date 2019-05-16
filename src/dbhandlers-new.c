@@ -2157,8 +2157,8 @@ NDOMOD_HANDLER_FUNCTION(host_status_data)
     SET_BIND_STR(host->long_plugin_output);            // long_output
     SET_BIND_STR(host->perf_data);                     // perfdata
     SET_BIND_INT(host->current_state);                 // current_state
-    SET_BIND_INT(host->should_be_scheduled);           // has_been_checked
-    SET_BIND_INT(host->has_been_checked);              // should_be_scheduled
+    SET_BIND_INT(host->has_been_checked);           // has_been_checked
+    SET_BIND_INT(host->should_be_scheduled);              // should_be_scheduled
     SET_BIND_INT(host->current_attempt);               // current_check_attempt
     SET_BIND_INT(host->max_attempts);                  // max_check_attempts
     SET_BIND_INT(host->last_check);                    // last_check
@@ -2248,7 +2248,220 @@ NDOMOD_HANDLER_FUNCTION(host_status_data)
 
 NDOMOD_HANDLER_FUNCTION(service_status_data)
 {
-    
+
+    int service_object_id = 0;
+    int timeperiod_object_id = 0;
+    service *service = (service *)data->object_ptr;
+    timeperiod *timeperiod = service->check_period_ptr;
+    char *event_handler_name = service->event_handler_ptr == NULL ? "" : service->event_handler_ptr->name;
+    char *check_command_name = service->check_command_ptr == NULL ? "" : service->check_command_ptr->name;
+
+    // If data->timestamp.tv_sec < dbinfo.latest_realtime_data_time, return;
+    // idk if this goes before or after the bind.
+
+    service_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_SERVICE, service->host_name, service->description);
+    timeperiod_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_TIMEPERIOD, timeperiod->name, NULL);
+
+
+    RESET_QUERY();
+
+    SET_SQL(
+        INSERT INTO
+            nagios_servicestatus
+        SET
+            instance_id                   = 1,
+            service_object_id             = ?,
+            status_update_time            = FROM_UNIXTIME(?),
+            output                        = ?,
+            long_output                   = ?,
+            perfdata                      = ?,
+            current_state                 = ?,
+            has_been_checked              = ?,
+            should_be_scheduled           = ?,
+            current_check_attempt         = ?,
+            max_check_attempts            = ?,
+            last_check                    = FROM_UNIXTIME(?),
+            next_check                    = FROM_UNIXTIME(?),
+            check_type                    = ?,
+            last_state_change             = FROM_UNIXTIME(?),
+            last_hard_state_change        = FROM_UNIXTIME(?),
+            last_hard_state               = ?,
+            last_time_ok                  = FROM_UNIXTIME(?),
+            last_time_warning             = FROM_UNIXTIME(?),
+            last_time_unknown             = FROM_UNIXTIME(?),
+            last_time_critical            = FROM_UNIXTIME(?),
+            state_type                    = ?,
+            last_notification             = FROM_UNIXTIME(?),
+            next_notification             = FROM_UNIXTIME(?),
+            no_more_notifications         = ?,
+            notifications_enabled         = ?,
+            problem_has_been_acknowledged = ?,
+            acknowledgement_type          = ?,
+            current_notification_number   = ?,
+            passive_checks_enabled        = ?,
+            active_checks_enabled         = ?,
+            event_handler_enabled         = ?,
+            flap_detection_enabled        = ?,
+            is_flapping                   = ?,
+            percent_state_change          = ?,
+            latency                       = ?,
+            execution_time                = ?,
+            scheduled_downtime_depth      = ?,
+            failure_prediction_enabled    = 0,
+            process_performance_data      = ?,
+            obsess_over_service           = ?,
+            modified_service_attributes   = ?,
+            event_handler                 = ?,
+            check_command                 = ?,
+            normal_check_interval         = ?,
+            retry_check_interval          = ?,
+            check_timeperiod_object_id    = ?
+        ON DUPLICATE KEY UPDATE
+            instance_id                   = 1,
+            service_object_id             = ?,
+            status_update_time            = FROM_UNIXTIME(?),
+            output                        = ?,
+            long_output                   = ?,
+            perfdata                      = ?,
+            current_state                 = ?,
+            has_been_checked              = ?,
+            should_be_scheduled           = ?,
+            current_check_attempt         = ?,
+            max_check_attempts            = ?,
+            last_check                    = FROM_UNIXTIME(?),
+            next_check                    = FROM_UNIXTIME(?),
+            check_type                    = ?,
+            last_state_change             = FROM_UNIXTIME(?),
+            last_hard_state_change        = FROM_UNIXTIME(?),
+            last_hard_state               = ?,
+            last_time_ok                  = FROM_UNIXTIME(?),
+            last_time_warning             = FROM_UNIXTIME(?),
+            last_time_unknown             = FROM_UNIXTIME(?),
+            last_time_critical            = FROM_UNIXTIME(?),
+            state_type                    = ?,
+            last_notification             = FROM_UNIXTIME(?),
+            next_notification             = FROM_UNIXTIME(?),
+            no_more_notifications         = ?,
+            notifications_enabled         = ?,
+            problem_has_been_acknowledged = ?,
+            acknowledgement_type          = ?,
+            current_notification_number   = ?,
+            passive_checks_enabled        = ?,
+            active_checks_enabled         = ?,
+            event_handler_enabled         = ?,
+            flap_detection_enabled        = ?,
+            is_flapping                   = ?,
+            percent_state_change          = ?,
+            latency                       = ?,
+            execution_time                = ?,
+            scheduled_downtime_depth      = ?,
+            failure_prediction_enabled    = 0,
+            process_performance_data      = ?,
+            obsess_over_service           = ?,
+            modified_service_attributes   = ?,
+            event_handler                 = ?,
+            check_command                 = ?,
+            normal_check_interval         = ?,
+            retry_check_interval          = ?,
+            check_timeperiod_object_id    = ?
+        );
+
+
+    SET_BIND_INT(service_object_id);                      // service_object_id
+    SET_BIND_INT(data->timestamp.tv_sec);                 // status_update_time
+    SET_BIND_STR(service->plugin_output);                 // output
+    SET_BIND_STR(service->long_plugin_output);            // long_output
+    SET_BIND_STR(service->perf_data);                     // perfdata
+    SET_BIND_INT(service->current_state);                 // current_state
+    SET_BIND_INT(service->has_been_checked);              // has_been_checked
+    SET_BIND_INT(service->should_be_scheduled);           // should_be_scheduled
+    SET_BIND_INT(service->current_attempt);               // current_check_attempt
+    SET_BIND_INT(service->max_attempts);                  // max_check_attempts
+    SET_BIND_INT(service->last_check);                    // last_check
+    SET_BIND_INT(service->next_check);                    // next_check
+    SET_BIND_INT(service->check_type);                    // check_type
+    SET_BIND_INT(service->last_state_change);             // last_state_change
+    SET_BIND_INT(service->last_hard_state_change);        // last_hard_state_change
+    SET_BIND_INT(service->last_hard_state);               // last_hard_state
+    SET_BIND_INT(service->last_time_ok);                  // last_time_ok
+    SET_BIND_INT(service->last_time_warning);             // last_time_warning
+    SET_BIND_INT(service->last_time_unknown);             // last_time_unknown
+    SET_BIND_INT(service->last_time_critical);            // last_time_critical
+    SET_BIND_INT(service->state_type);                    // state_type
+    SET_BIND_INT(service->last_notification);             // last_notification
+    SET_BIND_INT(service->next_notification);             // next_notification
+    SET_BIND_INT(service->no_more_notifications);         // no_more_notifications
+    SET_BIND_INT(service->notifications_enabled);         // notifications_enabled
+    SET_BIND_INT(service->problem_has_been_acknowledged); // problem_has_been_acknowledged
+    SET_BIND_INT(service->acknowledgement_type);          // acknowledgement_type
+    SET_BIND_INT(service->current_notification_number);   // current_notification_number
+    SET_BIND_INT(service->accept_passive_checks);         // passive_checks_enabled
+    SET_BIND_INT(service->checks_enabled);                // active_checks_enabled
+    SET_BIND_INT(service->event_handler_enabled);         // event_handler_enabled
+    SET_BIND_INT(service->flap_detection_enabled);        // flap_detection_enabled
+    SET_BIND_INT(service->is_flapping);                   // is_flapping
+    SET_BIND_DOUBLE(service->percent_state_change);       // percent_state_change
+    SET_BIND_DOUBLE(service->latency);                    // latency
+    SET_BIND_DOUBLE(service->execution_time);             // execution_time
+    SET_BIND_INT(service->scheduled_downtime_depth);      // scheduled_downtime_depth
+    SET_BIND_INT(service->process_performance_data);      // process_performance_data
+    SET_BIND_INT(service->obsess);                        // obsess_over_service
+    SET_BIND_INT(service->modified_attributes);           // modified_service_attributes
+    SET_BIND_STR(service->event_handler_name);            // event_handler
+    SET_BIND_STR(service->check_command_name);            // check_command
+    SET_BIND_DOUBLE(service->check_interval);             // normal_check_interval
+    SET_BIND_DOUBLE(service->retry_interval);             // retry_check_interval
+    SET_BIND_INT(timeperiod_object_id);                   // check_timeperiod_object_id
+
+
+    SET_BIND_INT(service_object_id);                      // service_object_id
+    SET_BIND_INT(data->timestamp.tv_sec);                 // status_update_time
+    SET_BIND_STR(service->plugin_output);                 // output
+    SET_BIND_STR(service->long_plugin_output);            // long_output
+    SET_BIND_STR(service->perf_data);                     // perfdata
+    SET_BIND_INT(service->current_state);                 // current_state
+    SET_BIND_INT(service->has_been_checked);              // has_been_checked
+    SET_BIND_INT(service->should_be_scheduled);           // should_be_scheduled
+    SET_BIND_INT(service->current_attempt);               // current_check_attempt
+    SET_BIND_INT(service->max_attempts);                  // max_check_attempts
+    SET_BIND_INT(service->last_check);                    // last_check
+    SET_BIND_INT(service->next_check);                    // next_check
+    SET_BIND_INT(service->check_type);                    // check_type
+    SET_BIND_INT(service->last_state_change);             // last_state_change
+    SET_BIND_INT(service->last_hard_state_change);        // last_hard_state_change
+    SET_BIND_INT(service->last_hard_state);               // last_hard_state
+    SET_BIND_INT(service->last_time_ok);                  // last_time_ok
+    SET_BIND_INT(service->last_time_warning);             // last_time_warning
+    SET_BIND_INT(service->last_time_unknown);             // last_time_unknown
+    SET_BIND_INT(service->last_time_critical);            // last_time_critical
+    SET_BIND_INT(service->state_type);                    // state_type
+    SET_BIND_INT(service->last_notification);             // last_notification
+    SET_BIND_INT(service->next_notification);             // next_notification
+    SET_BIND_INT(service->no_more_notifications);         // no_more_notifications
+    SET_BIND_INT(service->notifications_enabled);         // notifications_enabled
+    SET_BIND_INT(service->problem_has_been_acknowledged); // problem_has_been_acknowledged
+    SET_BIND_INT(service->acknowledgement_type);          // acknowledgement_type
+    SET_BIND_INT(service->current_notification_number);   // current_notification_number
+    SET_BIND_INT(service->accept_passive_checks);         // passive_checks_enabled
+    SET_BIND_INT(service->checks_enabled);                // active_checks_enabled
+    SET_BIND_INT(service->event_handler_enabled);         // event_handler_enabled
+    SET_BIND_INT(service->flap_detection_enabled);        // flap_detection_enabled
+    SET_BIND_INT(service->is_flapping);                   // is_flapping
+    SET_BIND_DOUBLE(service->percent_state_change);       // percent_state_change
+    SET_BIND_DOUBLE(service->latency);                    // latency
+    SET_BIND_DOUBLE(service->execution_time);             // execution_time
+    SET_BIND_INT(service->scheduled_downtime_depth);      // scheduled_downtime_depth
+    SET_BIND_INT(service->process_performance_data);      // process_performance_data
+    SET_BIND_INT(service->obsess);                        // obsess_over_service
+    SET_BIND_INT(service->modified_attributes);           // modified_service_attributes
+    SET_BIND_STR(service->event_handler_name);            // event_handler
+    SET_BIND_STR(service->check_command_name);            // check_command
+    SET_BIND_DOUBLE(service->check_interval);             // normal_check_interval
+    SET_BIND_DOUBLE(service->retry_interval);             // retry_check_interval
+    SET_BIND_INT(timeperiod_object_id);                   // check_timeperiod_object_id
+
+    BIND();
+    QUERY();
 }
 
 
