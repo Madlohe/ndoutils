@@ -2044,9 +2044,6 @@ NDOMOD_HANDLER_FUNCTION(host_status_data)
     char *event_handler_name = host->event_handler_ptr == NULL ? "" : host->event_handler_ptr->name;
     char *check_command_name = host->check_command_ptr == NULL ? "" : host->check_command_ptr->name;
 
-    // If data->timestamp.tv_sec < dbinfo.latest_realtime_data_time, return;
-    // idk if this goes before or after the bind.
-
     host_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_HOST, host->host_name, NULL);
     timeperiod_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_TIMEPERIOD, timeperiod->name, NULL);
 
@@ -2255,9 +2252,6 @@ NDOMOD_HANDLER_FUNCTION(service_status_data)
     timeperiod *timeperiod = service->check_period_ptr;
     char *event_handler_name = service->event_handler_ptr == NULL ? "" : service->event_handler_ptr->name;
     char *check_command_name = service->check_command_ptr == NULL ? "" : service->check_command_ptr->name;
-
-    // If data->timestamp.tv_sec < dbinfo.latest_realtime_data_time, return;
-    // idk if this goes before or after the bind.
 
     service_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_SERVICE, service->host_name, service->description);
     timeperiod_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_TIMEPERIOD, timeperiod->name, NULL);
@@ -2472,9 +2466,6 @@ NDOMOD_HANDLER_FUNCTION(contact_status_data)
     timeperiod *timeperiod = contact->check_period_ptr;
     char *event_handler_name = contact->event_handler_ptr == NULL ? "" : contact->event_handler_ptr->name;
     char *check_command_name = contact->check_command_ptr == NULL ? "" : contact->check_command_ptr->name;
-
-    // If data->timestamp.tv_sec < dbinfo.latest_realtime_data_time, return;
-    // idk if this goes before or after the bind.
 
     contact_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_CONTACT, contact->name, NULL);
 
