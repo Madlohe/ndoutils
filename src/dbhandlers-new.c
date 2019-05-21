@@ -2250,6 +2250,8 @@ NDOMOD_HANDLER_FUNCTION(service_status_data)
     int timeperiod_object_id = 0;
     service *service = (service *)data->object_ptr;
     timeperiod *timeperiod = service->check_period_ptr;
+
+    /* Not sure whether these pointers will ever be empty. Populate a default name in case they are */
     char *event_handler_name = service->event_handler_ptr == NULL ? "" : service->event_handler_ptr->name;
     char *check_command_name = service->check_command_ptr == NULL ? "" : service->check_command_ptr->name;
 
@@ -2564,15 +2566,105 @@ NDOMOD_HANDLER_FUNCTION(external_command_data)
 
 NDOMOD_HANDLER_FUNCTION(contact_notification_data)
 {
-    
+    int contact_object_id = 0;
+    contact *contact = (contact *)data->contact_ptr;
+
+    contact_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_CONTACT, contact->name, NULL);
+
+    RESET_BIND();
+    SET_SQL(
+        INSERT INTO 
+            nagios_contactnotifications
+        SET
+            instance_id       = 1,
+            notification_id   = ?,
+            start_time        = FROM_UNIXTIME(?),
+            start_time_usec   = ?,
+            end_time          = FROM_UNIXTIME(?),
+            end_time_usec     = ?,
+            contact_object_id = ?
+        ON DUPLICATE KEY UPDATE
+            instance_id       = 1,
+            notification_id   = ?,
+            start_time        = FROM_UNIXTIME(?),
+            start_time_usec   = ?,
+            end_time          = FROM_UNIXTIME(?),
+            end_time_usec     = ?,
+            contact_object_id = ?
+        );
+
+
+    // @todo this is from idi->dbinfo in dbhandlers.c
+    SET_BIND_INT(data->);                   // notification_id
+    SET_BIND_INT(data->start_time.tv_sec);  // start_time
+    SET_BIND_INT(data->start_time.tv_usec); // start_time_usec
+    SET_BIND_INT(data->end_time.tv_sec);    // end_time
+    SET_BIND_INT(data->end_time.tv_usec);   // end_time_usec
+    SET_BIND_INT(contact_object_id);        // contact_object_id
+
+    // @todo same
+    SET_BIND_INT(data->);                   // notification_id
+    SET_BIND_INT(data->start_time.tv_sec);  // start_time
+    SET_BIND_INT(data->start_time.tv_usec); // start_time_usec
+    SET_BIND_INT(data->end_time.tv_sec);    // end_time
+    SET_BIND_INT(data->end_time.tv_usec);   // end_time_usec
+    SET_BIND_INT(contact_object_id);        // contact_object_id
+
+    BIND();
+    QUERY();
 }
 
 
 NDOMOD_HANDLER_FUNCTION(contact_notification_method_data)
 {
-    
-}
+    int command_object_id = 0;
 
+    command_object_id = ndomod_get_object_id(NDO_TRUE, NDO2DB_OBJECTTYPE_COMMAND, data->command_name, NULL);
+
+    RESET_BIND();
+    SET_SQL(
+        INSERT INTO 
+            nagios_contactnotificationmethod
+        SET
+            instance_id            = 1,
+            contactnotification_id = ?,
+            start_time             = FROM_UNIXTIME(?),
+            start_time_usec        = ?,
+            end_time               = FROM_UNIXTIME(?),
+            end_time_usec          = ?,
+            command_object_id      = ?,
+            command_args           = ?
+        ON DUPLICATE KEY UPDATE
+            instance_id            = 1,
+            contactnotification_id = ?,
+            start_time             = FROM_UNIXTIME(?),
+            start_time_usec        = ?,
+            end_time               = FROM_UNIXTIME(?),
+            end_time_usec          = ?,
+            command_object_id      = ?,
+            command_args           = ?
+        );
+
+        SET_BIND_INT(data->);                   // contactnotification_id
+        SET_BIND_INT(data->start_time.tv_sec);  // start_time
+        SET_BIND_INT(data->start_time.tv_usec); // start_time_usec
+        SET_BIND_INT(data->end_time.tv_sec);    // end_time
+        SET_BIND_INT(data->end_time.tv_usec);   // end_time_usec
+        SET_BIND_INT(command_object_id);        // command_object_id
+        SET_BIND_STR(data->command_args);                   // command_args
+
+        SET_BIND_INT(data->);                   // contactnotification_id
+        SET_BIND_INT(data->start_time.tv_sec);  // start_time
+        SET_BIND_INT(data->start_time.tv_usec); // start_time_usec
+        SET_BIND_INT(data->end_time.tv_sec);    // end_time
+        SET_BIND_INT(data->end_time.tv_usec);   // end_time_usec
+        SET_BIND_INT(command_object_id);        // command_object_id
+        SET_BIND_STR(data->command_args);                   // command_args
+
+        BIND();
+        QUERY();
+
+}
 
 NDOMOD_HANDLER_FUNCTION(acknowledgement_data)
 {
